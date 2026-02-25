@@ -1,4 +1,4 @@
-import { Home, Leaf, Wallet, HeartPulse, Moon, Heart } from 'lucide-react'
+import { Home, Leaf, Wallet, HeartPulse, Moon, Heart, BarChart3 } from 'lucide-react'
 
 const iconSize = 20
 
@@ -9,4 +9,5 @@ export const SidebarIcons = {
   health: <HeartPulse size={iconSize} strokeWidth={2} />,
   sleep: <Moon size={iconSize} strokeWidth={2} />,
   love: <Heart size={iconSize} strokeWidth={2} />,
+  statistics: <BarChart3 size={iconSize} strokeWidth={2} />,
 }

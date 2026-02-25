@@ -5,6 +5,7 @@ import './AdminLayout.css'
 
 const navItems = [
   { path: '/', label: 'Главная страница', icon: SidebarIcons.home },
+  { path: '/statistics', label: 'Статистика', icon: SidebarIcons.statistics },
   { path: '/harmony', label: 'Гармония', icon: SidebarIcons.harmony },
   { path: '/finance', label: 'Финансы', icon: SidebarIcons.finance },
   { path: '/health', label: 'Здоровье', icon: SidebarIcons.health },
