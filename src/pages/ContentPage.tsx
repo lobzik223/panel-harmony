@@ -558,7 +558,14 @@ function ArticlesTab({ articles, onReload }: { articles: ContentArticle[]; onRel
       if (editing) {
         await api.content.articles.update(editing.id, form)
       } else {
-        await api.content.articles.create(form)
+        await api.content.articles.create({
+          blockType: form.blockType,
+          title: form.title,
+          descriptionShort: form.descriptionShort ?? undefined,
+          descriptionFull: form.descriptionFull ?? undefined,
+          imageUrl: form.imageUrl ?? undefined,
+          sortOrder: form.sortOrder ?? undefined,
+        })
       }
       closeForm()
       onReload()

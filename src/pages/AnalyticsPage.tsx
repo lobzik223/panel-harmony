@@ -213,7 +213,7 @@ export default function AnalyticsPage() {
                       label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
                       labelLine={false}
                     >
-                      {pieData.map((entry, i) => (
+                      {pieData.map((entry) => (
                         <Cell key={entry.name} fill={entry.fill} stroke="none" />
                       ))}
                     </Pie>
