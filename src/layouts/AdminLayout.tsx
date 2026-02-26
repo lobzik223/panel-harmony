@@ -5,6 +5,8 @@ import './AdminLayout.css'
 
 const navItems = [
   { path: '/', label: 'Главная страница', icon: SidebarIcons.home },
+  { path: '/analytics', label: 'Аналитика', icon: SidebarIcons.analytics },
+  { path: '/content', label: 'Контент', icon: SidebarIcons.content },
   { path: '/statistics', label: 'Статистика', icon: SidebarIcons.statistics },
   { path: '/harmony', label: 'Гармония', icon: SidebarIcons.harmony },
   { path: '/finance', label: 'Финансы', icon: SidebarIcons.finance },
@@ -30,7 +32,6 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             src="/harmonyicon.png"
             alt="Harmony"
             className="sidebar-logo"
-            style={{ filter: 'brightness(0)' }}
           />
           <span className="sidebar-brand">Harmony</span>
         </div>

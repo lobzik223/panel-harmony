@@ -11,7 +11,7 @@ interface CardPreviewProps {
   variant?: 'harmony' | 'sleep' | 'home'
 }
 
-export default function CardPreview({ title, subtitle, type, image, onEdit, onDelete, variant = 'harmony' }: CardPreviewProps) {
+export default function CardPreview({ title, subtitle, image, onEdit, onDelete, variant = 'harmony' }: CardPreviewProps) {
   const [imgError, setImgError] = useState(false)
   const imgSrc = image && !imgError ? (image.startsWith('http') || image.startsWith('/') ? image : `/${image}`) : ''
   const showPlaceholder = !imgSrc

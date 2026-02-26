@@ -25,12 +25,13 @@ export default function LoginPage() {
     <div className="login-page">
       <div className="login-card">
         <div className="login-header">
-          <img
-            src="/harmonyicon.png"
-            alt="Harmony"
-            className="login-logo"
-            style={{ filter: 'brightness(0)' }}
-          />
+          <div className="login-logo-wrap">
+            <img
+              src="/harmonyicon.png"
+              alt="Harmony"
+              className="login-logo"
+            />
+          </div>
           <h1>Harmony Admin</h1>
           <p>Вход в панель администратора</p>
         </div>
