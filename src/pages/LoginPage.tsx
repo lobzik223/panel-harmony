@@ -14,9 +14,28 @@ export default function LoginPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
+
+    const trimmedEmail = email.trim()
+    if (!trimmedEmail) {
+      setError('Введите почту')
+      return
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail)) {
+      setError('Некорректный формат почты')
+      return
+    }
+    if (!password) {
+      setError('Введите пароль')
+      return
+    }
+    if (password.length < 8) {
+      setError('Пароль не менее 8 символов')
+      return
+    }
+
     setLoading(true)
     try {
-      const success = await login(email, password)
+      const success = await login(trimmedEmail, password)
       if (success) {
         navigate('/')
       } else {
@@ -50,7 +69,7 @@ export default function LoginPage() {
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder="admin@harmony.ru"
+              placeholder="Введите почту"
               required
               autoComplete="email"
             />
