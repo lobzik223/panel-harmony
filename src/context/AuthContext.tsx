@@ -1,5 +1,7 @@
 import { createContext, useContext, useState, useCallback, useEffect } from 'react'
 
+import { API_BASE, API_PREFIX } from '../config'
+
 const AUTH_TOKEN_KEY = 'harmony_admin_token'
 const AUTH_EMAIL_KEY = 'harmony_admin_email'
 
@@ -12,8 +14,6 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | null>(null)
 
-const API_BASE = ((import.meta as any).env?.VITE_API_URL ?? 'http://localhost:3000').replace(/\/$/, '')
-const API_PREFIX = '/api'
 /** URL входа админа: должен совпадать с бэкендом (POST /api/admin/login). */
 export const ADMIN_LOGIN_URL = `${API_BASE}${API_PREFIX}/admin/login`
 

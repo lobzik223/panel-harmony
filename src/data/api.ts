@@ -1,6 +1,4 @@
-const API_BASE = (import.meta as any).env?.VITE_API_URL ?? 'http://localhost:3000'
-const API_PREFIX = '/api'
-const APP_KEY = (import.meta as any).env?.VITE_APP_KEY ?? ''
+import { API_BASE, API_PREFIX, APP_KEY } from '../config'
 const AUTH_TOKEN_KEY = 'harmony_admin_token'
 
 /** Заголовки для запросов к API: токен админа + APP_KEY. Без входа в панели запросы не должны уходить. */

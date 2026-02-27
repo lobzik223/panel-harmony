@@ -19,8 +19,9 @@ cd panel-harmony
 # Установить зависимости
 npm install
 
-# Опционально: задать URL бэкенда перед сборкой
-# echo "VITE_API_URL=https://api.your-domain.com" > .env
+# Задать URL бэкенда перед сборкой (иначе панель может обращаться к localhost)
+# Для panel.harmonymeditation.online есть fallback на https://api.harmonymeditation.online
+echo "VITE_API_URL=https://api.harmonymeditation.online" > .env
 
 # Собрать панель
 npm run build
