@@ -5,15 +5,17 @@ const AUTH_EMAIL_KEY = 'harmony_admin_email'
 
 interface AuthContextType {
   isAuthenticated: boolean
-  login: (email: string, password: string) => Promise<boolean>
+  login: (email: string, password: string) => Promise<void>
   logout: () => void
   token: string | null
 }
 
 const AuthContext = createContext<AuthContextType | null>(null)
 
-const API_BASE = (import.meta as any).env?.VITE_API_URL ?? 'http://localhost:3000'
+const API_BASE = ((import.meta as any).env?.VITE_API_URL ?? 'http://localhost:3000').replace(/\/$/, '')
 const API_PREFIX = '/api'
+/** URL входа админа: должен совпадать с бэкендом (POST /api/admin/login). */
+export const ADMIN_LOGIN_URL = `${API_BASE}${API_PREFIX}/admin/login`
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [token, setToken] = useState<string | null>(() => localStorage.getItem(AUTH_TOKEN_KEY))
@@ -27,24 +29,31 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, [token])
 
-  const login = useCallback(async (email: string, password: string): Promise<boolean> => {
+  const login = useCallback(async (email: string, password: string): Promise<void> => {
+    let res: Response
     try {
-      const res = await fetch(`${API_BASE}${API_PREFIX}/admin/login`, {
+      res = await fetch(ADMIN_LOGIN_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: email.trim(), password }),
       })
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}))
-        throw new Error(err.message || `Ошибка ${res.status}`)
-      }
-      const data = (await res.json()) as { token: string; email: string }
-      setToken(data.token)
-      if (data.email) localStorage.setItem(AUTH_EMAIL_KEY, data.email)
-      return true
     } catch {
-      return false
+      throw new Error('Не удалось подключиться к серверу. Запустите бэкенд (например, порт 3000) и проверьте VITE_API_URL.')
     }
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}))
+      const msg =
+        (err && err.message) ||
+        (res.status === 404
+          ? 'Сервер не найден (404). Запустите бэкенд и проверьте VITE_API_URL при сборке панели.'
+          : res.status === 401
+            ? 'Неверная почта или пароль'
+            : `Ошибка ${res.status}`)
+      throw new Error(msg)
+    }
+    const data = (await res.json()) as { token: string; email: string }
+    setToken(data.token)
+    if (data.email) localStorage.setItem(AUTH_EMAIL_KEY, data.email)
   }, [])
 
   const logout = useCallback(() => {

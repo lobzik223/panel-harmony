@@ -35,12 +35,10 @@ export default function LoginPage() {
 
     setLoading(true)
     try {
-      const success = await login(trimmedEmail, password)
-      if (success) {
-        navigate('/')
-      } else {
-        setError('Неверная почта или пароль')
-      }
+      await login(trimmedEmail, password)
+      navigate('/')
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Неверная почта или пароль')
     } finally {
       setLoading(false)
     }
