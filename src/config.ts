@@ -1,16 +1,17 @@
+const PRODUCTION_PANEL_HOST = 'panel.harmonymeditation.online'
+const PRODUCTION_API_BASE = 'https://api.harmonymeditation.online'
+
 /**
- * Базовый URL API. Задаётся при сборке через VITE_API_URL.
- * Если при сборке не задан — на домене панели используется продакшен-API,
- * иначе localhost (для разработки).
+ * Базовый URL API. При открытии с продакшен-панели всегда используется
+ * продакшен-бекенд (чтобы не зависеть от того, что было подставлено при сборке).
  */
 function getApiBase(): string {
+  if (typeof window !== 'undefined' && window.location.hostname === PRODUCTION_PANEL_HOST) {
+    return PRODUCTION_API_BASE
+  }
   const fromEnv = (import.meta as any).env?.VITE_API_URL
   if (fromEnv && fromEnv.trim() !== '') {
     return fromEnv.replace(/\/$/, '')
-  }
-  // Runtime fallback: если открыто с продакшен-панели — стучимся в продакшен-бекенд
-  if (typeof window !== 'undefined' && window.location.hostname === 'panel.harmonymeditation.online') {
-    return 'https://api.harmonymeditation.online'
   }
   return 'http://localhost:3000'
 }

@@ -4,6 +4,15 @@
 
 ---
 
+## Важно: если панель стучится в localhost или 404 на /login
+
+- **POST localhost:3000 / ERR_CONNECTION_REFUSED** — в коде панели при открытии с `panel.harmonymeditation.online` теперь всегда подставляется `https://api.harmonymeditation.online`. Нужно задеплоить актуальную сборку (см. ниже) и обновить страницу (Ctrl+F5).
+- **404 на /login** — это SPA: маршруты вроде `/login` обрабатывает React. Веб-сервер должен отдавать `index.html` для любых путей, а не искать файл `/login`.  
+  - **Nginx:** в `location /` обязательно должно быть `try_files $uri $uri/ /index.html;`  
+  - **Caddy:** в блоке сайта должна быть директива `try_file {path} /index.html` перед `file_server` (см. **CADDY-SETUP.md**).
+
+---
+
 ## Команды на сервере (Linux)
 
 Подключитесь к серверу по SSH и выполните:
