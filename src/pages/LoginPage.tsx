@@ -7,17 +7,23 @@ export default function LoginPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
+  const [loading, setLoading] = useState(false)
   const { login } = useAuth()
   const navigate = useNavigate()
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
-    const success = login(email, password)
-    if (success) {
-      navigate('/')
-    } else {
-      setError('Неверная почта или пароль. Демо: admin@harmony.ru / admin123')
+    setLoading(true)
+    try {
+      const success = await login(email, password)
+      if (success) {
+        navigate('/')
+      } else {
+        setError('Неверная почта или пароль')
+      }
+    } finally {
+      setLoading(false)
     }
   }
 
@@ -60,12 +66,10 @@ export default function LoginPage() {
               autoComplete="current-password"
             />
           </div>
-          <button type="submit" className="login-btn">
-            Войти
+          <button type="submit" className="login-btn" disabled={loading}>
+            {loading ? 'Вход...' : 'Войти'}
           </button>
         </form>
-
-        <p className="login-hint">Демо: admin@harmony.ru / admin123</p>
       </div>
     </div>
   )

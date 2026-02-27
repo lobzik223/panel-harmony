@@ -1,41 +1,60 @@
 import { createContext, useContext, useState, useCallback, useEffect } from 'react'
 
-const AUTH_KEY = 'harmony_admin_auth'
+const AUTH_TOKEN_KEY = 'harmony_admin_token'
+const AUTH_EMAIL_KEY = 'harmony_admin_email'
 
 interface AuthContextType {
   isAuthenticated: boolean
-  login: (email: string, password: string) => boolean
+  login: (email: string, password: string) => Promise<boolean>
   logout: () => void
+  token: string | null
 }
 
 const AuthContext = createContext<AuthContextType | null>(null)
 
+const API_BASE = (import.meta as any).env?.VITE_API_URL ?? 'http://localhost:3000'
+const API_PREFIX = '/api'
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [isAuthenticated, setIsAuthenticated] = useState(false)
+  const [token, setToken] = useState<string | null>(() => localStorage.getItem(AUTH_TOKEN_KEY))
 
   useEffect(() => {
-    const stored = localStorage.getItem(AUTH_KEY)
-    if (stored === 'true') setIsAuthenticated(true)
-  }, [])
-
-  const login = useCallback((email: string, password: string) => {
-    // Демо-доступ: admin@harmony.ru / admin123
-    const valid = email === 'admin@harmony.ru' && password === 'admin123'
-    if (valid) {
-      setIsAuthenticated(true)
-      localStorage.setItem(AUTH_KEY, 'true')
-      return true
+    if (token) {
+      localStorage.setItem(AUTH_TOKEN_KEY, token)
+    } else {
+      localStorage.removeItem(AUTH_TOKEN_KEY)
+      localStorage.removeItem(AUTH_EMAIL_KEY)
     }
-    return false
+  }, [token])
+
+  const login = useCallback(async (email: string, password: string): Promise<boolean> => {
+    try {
+      const res = await fetch(`${API_BASE}${API_PREFIX}/admin/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: email.trim(), password }),
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        throw new Error(err.message || `Ошибка ${res.status}`)
+      }
+      const data = (await res.json()) as { token: string; email: string }
+      setToken(data.token)
+      if (data.email) localStorage.setItem(AUTH_EMAIL_KEY, data.email)
+      return true
+    } catch {
+      return false
+    }
   }, [])
 
   const logout = useCallback(() => {
-    setIsAuthenticated(false)
-    localStorage.removeItem(AUTH_KEY)
+    setToken(null)
   }, [])
 
+  const isAuthenticated = !!token
+
   return (
-    <AuthContext.Provider value={{ isAuthenticated, login, logout }}>
+    <AuthContext.Provider value={{ isAuthenticated, login, logout, token }}>
       {children}
     </AuthContext.Provider>
   )

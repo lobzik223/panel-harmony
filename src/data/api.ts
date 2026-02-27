@@ -1,9 +1,16 @@
-import type { HomeCardsData, MeditationTrack, SleepTrack } from '../types'
-import { defaultHomeCards, defaultMeditationTracks, defaultSleepTracks } from './mockData'
-
 const API_BASE = (import.meta as any).env?.VITE_API_URL ?? 'http://localhost:3000'
 const API_PREFIX = '/api'
 const APP_KEY = (import.meta as any).env?.VITE_APP_KEY ?? ''
+const AUTH_TOKEN_KEY = 'harmony_admin_token'
+
+/** Заголовки для запросов к API: токен админа + APP_KEY. Без входа в панели запросы не должны уходить. */
+function getAuthHeaders(): Record<string, string> {
+  const h: Record<string, string> = { 'Content-Type': 'application/json' }
+  if (APP_KEY) h['X-Harmony-App-Key'] = APP_KEY
+  const token = typeof localStorage !== 'undefined' ? localStorage.getItem(AUTH_TOKEN_KEY) : null
+  if (token) h['Authorization'] = `Bearer ${token}`
+  return h
+}
 
 /** Возвращает полный URL для медиа (обложки, треки, картинки статей). */
 export function getMediaUrl(path: string | null | undefined): string {
@@ -63,44 +70,20 @@ export interface ContentArticle {
 
 async function fetchStats(): Promise<HealthStats> {
   const url = `${API_BASE}${API_PREFIX}/health/stats`
-  const headers: Record<string, string> = { 'Content-Type': 'application/json' }
-  if (APP_KEY) headers['X-Harmony-App-Key'] = APP_KEY
-  const res = await fetch(url, { headers })
+  const res = await fetch(url, { headers: getAuthHeaders() })
   if (!res.ok) throw new Error(`Stats: ${res.status}`)
   return res.json()
 }
 
-const STORAGE_KEYS = {
-  home: 'harmony_admin_home_cards',
-  meditation: 'harmony_admin_meditation',
-  sleep: 'harmony_admin_sleep',
-}
-
-function loadJson<T>(key: string, defaultData: T): T {
-  try {
-    const raw = localStorage.getItem(key)
-    if (raw) return JSON.parse(raw) as T
-  } catch (_) {}
-  return defaultData
-}
-
-function saveJson<T>(key: string, data: T) {
-  localStorage.setItem(key, JSON.stringify(data))
+async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
+  const headers = { ...getAuthHeaders(), ...(init?.headers as Record<string, string>) }
+  if (init?.body && typeof init.body === 'string' && !headers['Content-Type']) headers['Content-Type'] = 'application/json'
+  const res = await fetch(url, { ...init, headers })
+  if (!res.ok) throw new Error(await res.text())
+  return res.json()
 }
 
 export const api = {
-  homeCards: {
-    get: () => loadJson<HomeCardsData>(STORAGE_KEYS.home, defaultHomeCards),
-    save: (data: HomeCardsData) => saveJson(STORAGE_KEYS.home, data),
-  },
-  meditation: {
-    get: () => loadJson<MeditationTrack[]>(STORAGE_KEYS.meditation, defaultMeditationTracks),
-    save: (data: MeditationTrack[]) => saveJson(STORAGE_KEYS.meditation, data),
-  },
-  sleep: {
-    get: () => loadJson<SleepTrack[]>(STORAGE_KEYS.sleep, defaultSleepTracks),
-    save: (data: SleepTrack[]) => saveJson(STORAGE_KEYS.sleep, data),
-  },
   stats: {
     get: fetchStats,
   },
@@ -116,7 +99,7 @@ export const api = {
       update: (id: string, body: Partial<{ name: string; slug: string; type: string; sortOrder: number }>) =>
         fetchJson<ContentSection>(`${API_BASE}${API_PREFIX}/content/sections/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
       delete: (id: string) =>
-        fetch(`${API_BASE}${API_PREFIX}/content/sections/${id}`, { method: 'DELETE', headers: apiHeaders() }).then((r) => { if (!r.ok) throw new Error(String(r.status)) }),
+        fetch(`${API_BASE}${API_PREFIX}/content/sections/${id}`, { method: 'DELETE', headers: getAuthHeaders() }).then((r) => { if (!r.ok) throw new Error(String(r.status)) }),
     },
     tracks: {
       get: (sectionId?: string, type?: string) => {
@@ -131,7 +114,7 @@ export const api = {
       update: (id: string, body: Partial<ContentTrack>) =>
         fetchJson<ContentTrack>(`${API_BASE}${API_PREFIX}/content/tracks/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
       delete: (id: string) =>
-        fetch(`${API_BASE}${API_PREFIX}/content/tracks/${id}`, { method: 'DELETE', headers: apiHeaders() }).then((r) => { if (!r.ok) throw new Error(String(r.status)) }),
+        fetch(`${API_BASE}${API_PREFIX}/content/tracks/${id}`, { method: 'DELETE', headers: getAuthHeaders() }).then((r) => { if (!r.ok) throw new Error(String(r.status)) }),
     },
     articles: {
       get: (blockType?: string) =>
@@ -144,14 +127,16 @@ export const api = {
       update: (id: string, body: Partial<ContentArticle>) =>
         fetchJson<ContentArticle>(`${API_BASE}${API_PREFIX}/content/articles/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
       delete: (id: string) =>
-        fetch(`${API_BASE}${API_PREFIX}/content/articles/${id}`, { method: 'DELETE', headers: apiHeaders() }).then((r) => { if (!r.ok) throw new Error(String(r.status)) }),
+        fetch(`${API_BASE}${API_PREFIX}/content/articles/${id}`, { method: 'DELETE', headers: getAuthHeaders() }).then((r) => { if (!r.ok) throw new Error(String(r.status)) }),
     },
     home: () => fetchJson<{ sections: ContentSection[]; home: { featured: ContentArticle | null; recommended: ContentArticle[]; emergency: ContentArticle[] } }>(`${API_BASE}${API_PREFIX}/content/home`),
     upload: {
       cover: async (file: File) => {
         const form = new FormData()
         form.append('file', file)
-        const res = await fetch(`${API_BASE}${API_PREFIX}/content/upload/cover`, { method: 'POST', headers: { 'X-Harmony-App-Key': APP_KEY }, body: form })
+        const headers = getAuthHeaders()
+        delete (headers as any)['Content-Type']
+        const res = await fetch(`${API_BASE}${API_PREFIX}/content/upload/cover`, { method: 'POST', headers, body: form })
         if (!res.ok) throw new Error(await res.text())
         const data = (await res.json()) as { url: string }
         return data.url
@@ -159,7 +144,9 @@ export const api = {
       track: async (file: File) => {
         const form = new FormData()
         form.append('file', file)
-        const res = await fetch(`${API_BASE}${API_PREFIX}/content/upload/track`, { method: 'POST', headers: { 'X-Harmony-App-Key': APP_KEY }, body: form })
+        const headers = getAuthHeaders()
+        delete (headers as any)['Content-Type']
+        const res = await fetch(`${API_BASE}${API_PREFIX}/content/upload/track`, { method: 'POST', headers, body: form })
         if (!res.ok) throw new Error(await res.text())
         const data = (await res.json()) as { url: string }
         return data.url
@@ -167,25 +154,13 @@ export const api = {
       articleImage: async (file: File) => {
         const form = new FormData()
         form.append('file', file)
-        const res = await fetch(`${API_BASE}${API_PREFIX}/content/upload/article-image`, { method: 'POST', headers: { 'X-Harmony-App-Key': APP_KEY }, body: form })
+        const headers = getAuthHeaders()
+        delete (headers as any)['Content-Type']
+        const res = await fetch(`${API_BASE}${API_PREFIX}/content/upload/article-image`, { method: 'POST', headers, body: form })
         if (!res.ok) throw new Error(await res.text())
         const data = (await res.json()) as { url: string }
         return data.url
       },
     },
   },
-}
-
-function apiHeaders(): Record<string, string> {
-  const h: Record<string, string> = { 'Content-Type': 'application/json' }
-  if (APP_KEY) h['X-Harmony-App-Key'] = APP_KEY
-  return h
-}
-
-async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
-  const headers = { ...apiHeaders(), ...(init?.headers as Record<string, string>) }
-  if (init?.body && typeof init.body === 'string' && !headers['Content-Type']) headers['Content-Type'] = 'application/json'
-  const res = await fetch(url, { ...init, headers })
-  if (!res.ok) throw new Error(await res.text())
-  return res.json()
 }

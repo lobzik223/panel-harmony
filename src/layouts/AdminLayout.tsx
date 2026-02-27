@@ -4,15 +4,9 @@ import { SidebarIcons } from '../components/SidebarIcons'
 import './AdminLayout.css'
 
 const navItems = [
-  { path: '/', label: 'Главная страница', icon: SidebarIcons.home },
-  { path: '/analytics', label: 'Аналитика', icon: SidebarIcons.analytics },
+  { path: '/', label: 'Главная', icon: SidebarIcons.home },
   { path: '/content', label: 'Контент', icon: SidebarIcons.content },
   { path: '/statistics', label: 'Статистика', icon: SidebarIcons.statistics },
-  { path: '/harmony', label: 'Гармония', icon: SidebarIcons.harmony },
-  { path: '/finance', label: 'Финансы', icon: SidebarIcons.finance },
-  { path: '/health', label: 'Здоровье', icon: SidebarIcons.health },
-  { path: '/sleep', label: 'Сон', icon: SidebarIcons.sleep },
-  { path: '/love', label: 'Любовь', icon: SidebarIcons.love },
 ]
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {

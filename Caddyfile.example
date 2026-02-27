@@ -1,0 +1,30 @@
+# Панель Harmony — panel.harmonymeditation.online
+# Скопируйте в /etc/caddy/Caddyfile (или свой путь) и перезапустите Caddy.
+
+panel.harmonymeditation.online {
+    # Корень сайта — папка со сборкой панели (на сервере у вас: /root/panel-harmony/dist)
+    root * /root/panel-harmony/dist
+
+    # SPA: все маршруты отдаём index.html, если файла нет
+    try_file {path} /index.html
+    file_server
+
+    # Заголовки безопасности
+    header {
+        X-Frame-Options "SAMEORIGIN"
+        X-Content-Type-Options "nosniff"
+        Referrer-Policy "strict-origin-when-cross-origin"
+        X-XSS-Protection "1; mode=block"
+        Permissions-Policy "geolocation=(), microphone=(), camera=()"
+        -Server
+    }
+
+    # Логи
+    log {
+        output file /var/log/caddy/panel-harmony.log
+        format json
+    }
+
+    # Сжатие
+    encode gzip zstd
+}

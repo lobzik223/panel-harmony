@@ -96,6 +96,8 @@ server {
 
 Перезапуск Nginx после правок: `sudo systemctl reload nginx`
 
+**Используете Caddy?** Подробная настройка для домена **panel.harmonymeditation.online** (HTTPS, заголовки безопасности) — в файле **CADDY-SETUP.md** и пример конфига в **Caddyfile.example**.
+
 ## 4. Переменные для продакшена
 
 Перед сборкой задайте URL бэкенда (в `.env` или в системе):
