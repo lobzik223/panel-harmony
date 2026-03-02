@@ -25,7 +25,6 @@ export default function DashboardPage() {
     descriptionFull: '',
     imageUrl: '',
     publishedAt: '',
-    durationMinutes: '',
   })
 
   const loadCards = () => {
@@ -52,7 +51,6 @@ export default function DashboardPage() {
       descriptionFull: '',
       imageUrl: '',
       publishedAt: new Date().toISOString().slice(0, 10),
-      durationMinutes: '',
     })
     setFormOpen(true)
   }
@@ -65,7 +63,6 @@ export default function DashboardPage() {
       descriptionFull: a.descriptionFull ?? '',
       imageUrl: a.imageUrl ?? '',
       publishedAt: a.publishedAt ? a.publishedAt.slice(0, 10) : '',
-      durationMinutes: a.durationMinutes != null ? String(a.durationMinutes) : '',
     })
     setFormOpen(true)
   }
@@ -94,7 +91,6 @@ export default function DashboardPage() {
       descriptionFull: form.descriptionFull.trim() || undefined,
       imageUrl: form.imageUrl.trim() || undefined,
       publishedAt: form.publishedAt || undefined,
-      durationMinutes: form.durationMinutes ? parseInt(form.durationMinutes, 10) : undefined,
     }
     const promise = editingId
       ? api.content.articles.update(editingId, payload)
@@ -196,7 +192,6 @@ export default function DashboardPage() {
                   <div style={{ fontWeight: 600, marginBottom: 4 }}>{card.title}</div>
                   <div style={{ fontSize: 13, color: '#64748b' }}>
                     {card.publishedAt ? formatDate(card.publishedAt) : '—'}
-                    {card.durationMinutes != null && ` · ${card.durationMinutes} мин`}
                   </div>
                   {card.descriptionShort && (
                     <div style={{ fontSize: 13, color: '#64748b', marginTop: 4 }}>{card.descriptionShort.slice(0, 80)}…</div>
@@ -275,7 +270,8 @@ export default function DashboardPage() {
               </div>
               <div style={{ marginBottom: 12 }}>
                 <label style={{ display: 'block', marginBottom: 4, fontWeight: 500 }}>Обложка</label>
-                <input type="file" accept="image/*" onChange={handleImageUpload} style={{ marginBottom: 8 }} />
+                <input type="file" accept="image/jpeg,image/png,image/webp" onChange={handleImageUpload} style={{ marginBottom: 8 }} />
+                <p style={{ fontSize: 12, color: '#64748b', marginTop: 4 }}>JPG, PNG или WebP, до 1 МБ</p>
                 {form.imageUrl && (
                   <div style={{ marginTop: 8 }}>
                     <img src={getMediaUrl(form.imageUrl)} alt="" style={{ maxWidth: 120, maxHeight: 80, objectFit: 'cover', borderRadius: 8 }} />
@@ -288,17 +284,6 @@ export default function DashboardPage() {
                   type="date"
                   value={form.publishedAt}
                   onChange={(e) => setForm((f) => ({ ...f, publishedAt: e.target.value }))}
-                  style={{ width: '100%', padding: 8, border: '1px solid #e2e8f0', borderRadius: 8 }}
-                />
-              </div>
-              <div style={{ marginBottom: 16 }}>
-                <label style={{ display: 'block', marginBottom: 4, fontWeight: 500 }}>Длительность (мин)</label>
-                <input
-                  type="number"
-                  min={0}
-                  value={form.durationMinutes}
-                  onChange={(e) => setForm((f) => ({ ...f, durationMinutes: e.target.value }))}
-                  placeholder="8"
                   style={{ width: '100%', padding: 8, border: '1px solid #e2e8f0', borderRadius: 8 }}
                 />
               </div>
