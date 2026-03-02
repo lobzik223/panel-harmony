@@ -96,8 +96,13 @@ export default function DashboardPage() {
       ? api.content.articles.update(editingId, payload)
       : api.content.articles.create(payload)
     promise
-      .then(() => {
+      .then((createdOrUpdated) => {
         closeForm()
+        if (editingId) {
+          setCards((prev) => prev.map((c) => (c.id === editingId ? (createdOrUpdated as ContentArticle) : c)))
+        } else {
+          setCards((prev) => [createdOrUpdated as ContentArticle, ...prev])
+        }
         loadCards()
       })
       .catch((err) => alert(err instanceof Error ? err.message : 'Ошибка сохранения'))
