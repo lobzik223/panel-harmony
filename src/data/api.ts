@@ -62,14 +62,22 @@ export interface ContentArticle {
   imageUrl: string | null
   sortOrder: number
   publishedAt: string | null
+  durationMinutes: number | null
   createdAt: string
   updatedAt: string
+}
+
+function apiErrorMessage(res: Response, body?: string): string {
+  if (res.status === 401) {
+    return '401: Задайте VITE_APP_KEY в .env панели (то же значение, что APP_KEY на бэкенде) и пересоберите панель (npm run build).'
+  }
+  return body || `Ошибка ${res.status}`
 }
 
 async function fetchStats(): Promise<HealthStats> {
   const url = `${API_BASE}${API_PREFIX}/health/stats`
   const res = await fetch(url, { headers: getAuthHeaders() })
-  if (!res.ok) throw new Error(`Stats: ${res.status}`)
+  if (!res.ok) throw new Error(apiErrorMessage(res, `Stats: ${res.status}`))
   return res.json()
 }
 
@@ -77,8 +85,9 @@ async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
   const headers = { ...getAuthHeaders(), ...(init?.headers as Record<string, string>) }
   if (init?.body && typeof init.body === 'string' && !headers['Content-Type']) headers['Content-Type'] = 'application/json'
   const res = await fetch(url, { ...init, headers })
-  if (!res.ok) throw new Error(await res.text())
-  return res.json()
+  const text = await res.text()
+  if (!res.ok) throw new Error(apiErrorMessage(res, text || undefined))
+  return text ? JSON.parse(text) : (null as T)
 }
 
 export const api = {
@@ -120,7 +129,7 @@ export const api = {
           `${API_BASE}${API_PREFIX}/content/articles${blockType ? `?blockType=${encodeURIComponent(blockType)}` : ''}`,
         ),
       getById: (id: string) => fetchJson<ContentArticle>(`${API_BASE}${API_PREFIX}/content/articles/${id}`),
-      create: (body: { blockType: string; title: string; descriptionShort?: string; descriptionFull?: string; imageUrl?: string; sortOrder?: number }) =>
+      create: (body: { blockType: string; title: string; descriptionShort?: string; descriptionFull?: string; imageUrl?: string; sortOrder?: number; publishedAt?: string; durationMinutes?: number }) =>
         fetchJson<ContentArticle>(`${API_BASE}${API_PREFIX}/content/articles`, { method: 'POST', body: JSON.stringify(body) }),
       update: (id: string, body: Partial<ContentArticle>) =>
         fetchJson<ContentArticle>(`${API_BASE}${API_PREFIX}/content/articles/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
