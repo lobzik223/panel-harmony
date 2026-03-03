@@ -10,6 +10,51 @@ function getAuthHeaders(): Record<string, string> {
   return h
 }
 
+function getStoredToken(): string | null {
+  if (typeof localStorage === 'undefined') return null
+  return localStorage.getItem(AUTH_TOKEN_KEY)
+}
+
+function getJwtExp(token: string): number | null {
+  try {
+    const payload = token.split('.')[1]
+    if (!payload) return null
+    const json = atob(payload.replace(/-/g, '+').replace(/_/g, '/'))
+    const parsed = JSON.parse(json) as { exp?: number }
+    return typeof parsed.exp === 'number' ? parsed.exp : null
+  } catch {
+    return null
+  }
+}
+
+function isTokenExpired(token: string): boolean {
+  const exp = getJwtExp(token)
+  if (!exp) return false
+  const now = Math.floor(Date.now() / 1000)
+  // Небольшой буфер, чтобы не отправлять заведомо истекший токен.
+  return now >= exp - 5
+}
+
+function clearAuthToken(): void {
+  if (typeof localStorage === 'undefined') return
+  localStorage.removeItem(AUTH_TOKEN_KEY)
+}
+
+function unauthorizedMessage(): string {
+  const token = getStoredToken()
+  if (!APP_KEY) {
+    return '401: Не задан VITE_APP_KEY в .env панели. Укажите APP_KEY бэкенда и пересоберите панель.'
+  }
+  if (!token) {
+    return 'Сессия не найдена. Войдите в панель заново.'
+  }
+  if (isTokenExpired(token)) {
+    clearAuthToken()
+    return 'Сессия администратора истекла. Войдите в панель заново.'
+  }
+  return '401: Доступ запрещен. Проверьте APP_KEY на бэкенде и в панели, затем войдите заново.'
+}
+
 /** Возвращает полный URL для медиа (обложки, треки, картинки статей). */
 export function getMediaUrl(path: string | null | undefined): string {
   if (!path) return ''
@@ -69,7 +114,7 @@ export interface ContentArticle {
 
 function apiErrorMessage(res: Response, body?: string): string {
   if (res.status === 401) {
-    return '401: Задайте VITE_APP_KEY в .env панели (то же значение, что APP_KEY на бэкенде) и пересоберите панель (npm run build).'
+    return unauthorizedMessage()
   }
   return body || `Ошибка ${res.status}`
 }
@@ -82,6 +127,11 @@ async function fetchStats(): Promise<HealthStats> {
 }
 
 async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
+  const token = getStoredToken()
+  if (token && isTokenExpired(token)) {
+    clearAuthToken()
+    throw new Error('Сессия администратора истекла. Войдите в панель заново.')
+  }
   const headers = { ...getAuthHeaders(), ...(init?.headers as Record<string, string>) }
   if (init?.body && typeof init.body === 'string' && !headers['Content-Type']) headers['Content-Type'] = 'application/json'
   const res = await fetch(url, { ...init, headers })
@@ -144,7 +194,7 @@ export const api = {
         const headers = getAuthHeaders()
         delete (headers as any)['Content-Type']
         const res = await fetch(`${API_BASE}${API_PREFIX}/content/upload/cover`, { method: 'POST', headers, body: form })
-        if (!res.ok) throw new Error(await res.text())
+        if (!res.ok) throw new Error(apiErrorMessage(res, await res.text()))
         const data = (await res.json()) as { url: string }
         return data.url
       },
@@ -154,7 +204,7 @@ export const api = {
         const headers = getAuthHeaders()
         delete (headers as any)['Content-Type']
         const res = await fetch(`${API_BASE}${API_PREFIX}/content/upload/track`, { method: 'POST', headers, body: form })
-        if (!res.ok) throw new Error(await res.text())
+        if (!res.ok) throw new Error(apiErrorMessage(res, await res.text()))
         const data = (await res.json()) as { url: string }
         return data.url
       },
@@ -164,7 +214,7 @@ export const api = {
         const headers = getAuthHeaders()
         delete (headers as any)['Content-Type']
         const res = await fetch(`${API_BASE}${API_PREFIX}/content/upload/article-image`, { method: 'POST', headers, body: form })
-        if (!res.ok) throw new Error(await res.text())
+        if (!res.ok) throw new Error(apiErrorMessage(res, await res.text()))
         const data = (await res.json()) as { url: string }
         return data.url
       },
