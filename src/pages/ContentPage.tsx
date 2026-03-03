@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { api, getMediaUrl, type ContentSection, type ContentTrack, type ContentArticle } from '../data/api'
 import './SectionPage.css'
 import './ContentPage.css'
@@ -17,7 +18,9 @@ const ARTICLE_BLOCK_TYPES = [
 ]
 
 export default function ContentPage() {
-  const [tab, setTab] = useState<Tab>('sections')
+  const [searchParams] = useSearchParams()
+  const tabFromUrl = searchParams.get('tab') as Tab | null
+  const [tab, setTab] = useState<Tab>(tabFromUrl && ['sections', 'tracks', 'articles'].includes(tabFromUrl) ? tabFromUrl : 'sections')
   const [sections, setSections] = useState<ContentSection[]>([])
   const [tracks, setTracks] = useState<ContentTrack[]>([])
   const [articles, setArticles] = useState<ContentArticle[]>([])
@@ -59,6 +62,11 @@ export default function ContentPage() {
   useEffect(() => {
     load()
   }, [load])
+
+  useEffect(() => {
+    const t = searchParams.get('tab') as Tab | null
+    if (t && (t === 'sections' || t === 'tracks' || t === 'articles')) setTab(t)
+  }, [searchParams])
 
   return (
     <div className="section-page content-page">

@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react'
 import { Image as ImageIcon, Pencil, Plus, Trash2 } from 'lucide-react'
+import { Link } from 'react-router-dom'
 import {
   api,
   getMediaUrl,
   type ContentArticle,
   type ContentCourse,
+  type ContentSection,
   type ContentTrack,
 } from '../data/api'
 import './SectionPage.css'
@@ -41,6 +43,7 @@ function CardCover({ imageUrl }: { imageUrl: string | null | undefined }) {
 export default function DashboardPage() {
   const [cards, setCards] = useState<ContentArticle[]>([])
   const [popularTracks, setPopularTracks] = useState<ContentTrack[]>([])
+  const [homeSections, setHomeSections] = useState<ContentSection[]>([])
   const [courses, setCourses] = useState<ContentCourse[]>([])
   const [allTracks, setAllTracks] = useState<ContentTrack[]>([])
   const [loading, setLoading] = useState(true)
@@ -74,12 +77,14 @@ export default function DashboardPage() {
     Promise.all([
       api.content.articles.get(BLOCK_TYPE),
       api.content.tracks.popular(10),
+      api.content.sections.get('HOME'),
       api.content.courses.get(),
       api.content.tracks.get(),
     ])
-      .then(([articles, popular, coursesList, tracks]) => {
+      .then(([articles, popular, homeSectionsList, coursesList, tracks]) => {
         setCards(articles)
         setPopularTracks(popular)
+        setHomeSections(homeSectionsList)
         setCourses(coursesList)
         setAllTracks(tracks)
         setError(null)
@@ -286,6 +291,37 @@ export default function DashboardPage() {
               <div style={{ color: '#0f172a', fontWeight: 600, fontSize: 13 }}>
                 {track.listenCount ?? 0} прослушиваний
               </div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section className="card-section">
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+          <h2>Разделы главного экрана: Гармония, Расслабление, Осознанность, Энергия</h2>
+          <Link to="/content?tab=tracks" className="btn-primary" style={{ textDecoration: 'none', color: 'inherit' }}>
+            <Plus size={18} /> Контент → Треки
+          </Link>
+        </div>
+        <p style={{ color: '#64748b', marginBottom: 16 }}>
+          Эти блоки показываются на главном экране приложения. Добавляйте треки в разделы во вкладке <strong>Контент → Треки</strong> (выберите раздел Гармония, Расслабление, Осознанность или Энергия).
+        </p>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          {homeSections.length === 0 ? (
+            <div style={{ padding: 24, background: '#f8fafc', borderRadius: 12, color: '#64748b' }}>
+              Разделы появятся после применения миграций на сервере. Пересоберите бэкенд (docker compose build и up).
+            </div>
+          ) : homeSections.map((section) => (
+            <div key={section.id} style={{ display: 'flex', alignItems: 'center', gap: 16, padding: 16, background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12 }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontWeight: 700, marginBottom: 4 }}>{section.name}</div>
+                <div style={{ fontSize: 13, color: '#64748b' }}>
+                  Треков: {section._count?.tracks ?? 0}
+                </div>
+              </div>
+              <Link to="/content?tab=tracks" className="btn-secondary" style={{ textDecoration: 'none' }}>
+                Добавить треки
+              </Link>
             </div>
           ))}
         </div>
