@@ -8,6 +8,7 @@ type Tab = 'sections' | 'tracks' | 'articles'
 const SECTION_TYPES = [
   { value: 'MEDITATION', label: 'Медитации' },
   { value: 'SLEEP', label: 'Сон' },
+  { value: 'HOME', label: 'Главная (Гармония, Расслабление, Осознанность, Энергия)' },
 ]
 const ARTICLE_BLOCK_TYPES = [
   { value: 'FEATURED', label: 'Главная (избранное)' },
@@ -256,12 +257,14 @@ function TracksTab({
   const [saving, setSaving] = useState(false)
   const [uploadingCover, setUploadingCover] = useState(false)
   const [uploadingAudio, setUploadingAudio] = useState(false)
+  const [lastUploadSize, setLastUploadSize] = useState<number | null>(null)
   const [form, setForm] = useState<Partial<ContentTrack> & { sectionId: string; title: string }>({
     sectionId: sections[0]?.id ?? '',
     title: '',
     descriptionShort: '',
     coverUrl: null,
     audioUrl: null,
+    durationSeconds: null,
     level: null,
     isPremium: false,
     sortOrder: 0,
@@ -270,12 +273,14 @@ function TracksTab({
   const openEdit = (t: ContentTrack) => {
     setEditing(t)
     setCreating(false)
+    setLastUploadSize(null)
     setForm({
       sectionId: t.sectionId,
       title: t.title,
       descriptionShort: t.descriptionShort,
       coverUrl: t.coverUrl ?? null,
       audioUrl: t.audioUrl ?? null,
+      durationSeconds: t.durationSeconds ?? null,
       level: t.level ?? null,
       isPremium: t.isPremium,
       sortOrder: t.sortOrder,
@@ -284,12 +289,14 @@ function TracksTab({
   const openCreate = () => {
     setEditing(null)
     setCreating(true)
+    setLastUploadSize(null)
     setForm({
       sectionId: sections[0]?.id ?? '',
       title: '',
       descriptionShort: '',
       coverUrl: null,
       audioUrl: null,
+      durationSeconds: null,
       level: null,
       isPremium: false,
       sortOrder: tracks.length,
@@ -318,13 +325,20 @@ function TracksTab({
     if (!file) return
     setUploadingAudio(true)
     try {
-      const url = await api.content.upload.track(file)
-      setForm((f) => ({ ...f, audioUrl: url }))
+      const result = await api.content.upload.track(file)
+      setForm((f) => ({ ...f, audioUrl: result.url }))
+      setLastUploadSize(result.size ?? null)
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Ошибка загрузки аудио')
     } finally {
       setUploadingAudio(false)
     }
+  }
+
+  const formatSize = (bytes: number) => {
+    if (bytes < 1024) return `${bytes} Б`
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} КБ`
+    return `${(bytes / (1024 * 1024)).toFixed(2)} МБ`
   }
 
   const save = async () => {
@@ -419,8 +433,26 @@ function TracksTab({
             <div className="content-upload-row">
               <input type="file" accept="audio/*" onChange={handleAudio} disabled={uploadingAudio} />
               {form.audioUrl && <span className="content-file-name">Файл загружен</span>}
+              {lastUploadSize != null && (
+                <span className="content-file-size">Размер: {formatSize(lastUploadSize)}</span>
+              )}
               {uploadingAudio && <span>Загрузка...</span>}
             </div>
+            <label>Длительность, мин</label>
+            <input
+              type="number"
+              min={0}
+              step={1}
+              value={form.durationSeconds != null ? Math.round(form.durationSeconds / 60) : ''}
+              onChange={(e) => {
+                const v = e.target.value
+                setForm((f) => ({
+                  ...f,
+                  durationSeconds: v === '' ? null : (Number(v) || 0) * 60,
+                }))
+              }}
+              placeholder="Например: 5"
+            />
             <label>Уровень</label>
             <input
               value={form.level ?? ''}

@@ -128,7 +128,8 @@
   border: 1px solid #e0e0e0;
 }
 
-.content-file-name {
+.content-file-name,
+.content-file-size {
   font-size: 13px;
   color: #616161;
 }

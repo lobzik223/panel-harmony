@@ -90,12 +90,14 @@ export interface ContentTrack {
   descriptionShort: string
   coverUrl: string | null
   audioUrl: string | null
+  durationSeconds?: number | null
   level: string | null
   isPremium: boolean
   sortOrder: number
   createdAt: string
   updatedAt: string
   section?: ContentSection
+  listenCount?: number
 }
 
 export interface ContentArticle {
@@ -110,6 +112,27 @@ export interface ContentArticle {
   durationMinutes: number | null
   createdAt: string
   updatedAt: string
+}
+
+export interface ContentCourseTrack {
+  id: string
+  courseId: string
+  trackId: string
+  sortOrder: number
+  track: ContentTrack
+}
+
+export interface ContentCourse {
+  id: string
+  title: string
+  descriptionShort: string
+  descriptionFull: string | null
+  imageUrl: string | null
+  sortOrder: number
+  isPublished: boolean
+  createdAt: string
+  updatedAt: string
+  tracks: ContentCourseTrack[]
 }
 
 function apiErrorMessage(res: Response, body?: string): string {
@@ -172,6 +195,8 @@ export const api = {
         fetchJson<ContentTrack>(`${API_BASE}${API_PREFIX}/content/tracks/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
       delete: (id: string) =>
         fetch(`${API_BASE}${API_PREFIX}/content/tracks/${id}`, { method: 'DELETE', headers: getAuthHeaders() }).then((r) => { if (!r.ok) throw new Error(String(r.status)) }),
+      popular: (limit = 10) =>
+        fetchJson<ContentTrack[]>(`${API_BASE}${API_PREFIX}/content/popular-tracks?limit=${encodeURIComponent(String(limit))}`),
     },
     articles: {
       get: (blockType?: string) =>
@@ -186,6 +211,19 @@ export const api = {
       delete: (id: string) =>
         fetch(`${API_BASE}${API_PREFIX}/content/articles/${id}`, { method: 'DELETE', headers: getAuthHeaders() }).then((r) => { if (!r.ok) throw new Error(String(r.status)) }),
     },
+    courses: {
+      get: (published?: boolean) =>
+        fetchJson<ContentCourse[]>(
+          `${API_BASE}${API_PREFIX}/content/courses${published !== undefined ? `?published=${published ? '1' : '0'}` : ''}`,
+        ),
+      getById: (id: string) => fetchJson<ContentCourse>(`${API_BASE}${API_PREFIX}/content/courses/${id}`),
+      create: (body: { title: string; descriptionShort?: string; descriptionFull?: string; imageUrl?: string; sortOrder?: number; isPublished?: boolean; trackIds?: string[] }) =>
+        fetchJson<ContentCourse>(`${API_BASE}${API_PREFIX}/content/courses`, { method: 'POST', body: JSON.stringify(body) }),
+      update: (id: string, body: Partial<{ title: string; descriptionShort: string; descriptionFull: string; imageUrl: string; sortOrder: number; isPublished: boolean; trackIds: string[] }>) =>
+        fetchJson<ContentCourse>(`${API_BASE}${API_PREFIX}/content/courses/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
+      delete: (id: string) =>
+        fetch(`${API_BASE}${API_PREFIX}/content/courses/${id}`, { method: 'DELETE', headers: getAuthHeaders() }).then((r) => { if (!r.ok) throw new Error(String(r.status)) }),
+    },
     home: () => fetchJson<{ sections: ContentSection[]; home: { featured: ContentArticle | null; recommended: ContentArticle[]; emergency: ContentArticle[] } }>(`${API_BASE}${API_PREFIX}/content/home`),
     upload: {
       cover: async (file: File) => {
@@ -198,15 +236,15 @@ export const api = {
         const data = (await res.json()) as { url: string }
         return data.url
       },
-      track: async (file: File) => {
+      track: async (file: File): Promise<{ url: string; size?: number }> => {
         const form = new FormData()
         form.append('file', file)
         const headers = getAuthHeaders()
         delete (headers as any)['Content-Type']
         const res = await fetch(`${API_BASE}${API_PREFIX}/content/upload/track`, { method: 'POST', headers, body: form })
         if (!res.ok) throw new Error(apiErrorMessage(res, await res.text()))
-        const data = (await res.json()) as { url: string }
-        return data.url
+        const data = (await res.json()) as { url: string; size?: number }
+        return { url: data.url, size: data.size }
       },
       articleImage: async (file: File) => {
         const form = new FormData()
