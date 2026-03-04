@@ -334,7 +334,11 @@ function TracksTab({
     setUploadingAudio(true)
     try {
       const result = await api.content.upload.track(file)
-      setForm((f) => ({ ...f, audioUrl: result.url }))
+      setForm((f) => ({
+        ...f,
+        audioUrl: result.url,
+        durationSeconds: result.durationSeconds ?? f.durationSeconds ?? null,
+      }))
       setLastUploadSize(result.size ?? null)
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Ошибка загрузки аудио')
@@ -446,21 +450,15 @@ function TracksTab({
               )}
               {uploadingAudio && <span>Загрузка...</span>}
             </div>
-            <label>Длительность, мин</label>
-            <input
-              type="number"
-              min={0}
-              step={1}
-              value={form.durationSeconds != null ? Math.round(form.durationSeconds / 60) : ''}
-              onChange={(e) => {
-                const v = e.target.value
-                setForm((f) => ({
-                  ...f,
-                  durationSeconds: v === '' ? null : (Number(v) || 0) * 60,
-                }))
-              }}
-              placeholder="Например: 5"
-            />
+            {(form.durationSeconds != null && form.durationSeconds > 0) && (
+              <>
+                <label>Длительность</label>
+                <div className="content-readonly-value">
+                  {Math.floor(form.durationSeconds / 60)} мин {form.durationSeconds % 60 > 0 ? `${form.durationSeconds % 60} сек` : ''}
+                  <span className="content-hint-inline"> (определяется из аудиофайла)</span>
+                </div>
+              </>
+            )}
             <label>Уровень</label>
             <input
               value={form.level ?? ''}

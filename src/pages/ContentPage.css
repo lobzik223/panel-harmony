@@ -134,6 +134,18 @@
   color: #616161;
 }
 
+.content-readonly-value {
+  font-size: 14px;
+  color: #0f172a;
+  padding: 8px 0;
+}
+
+.content-hint-inline {
+  font-size: 12px;
+  color: #64748b;
+  font-weight: 400;
+}
+
 .content-form-actions {
   display: flex;
   gap: 12px;

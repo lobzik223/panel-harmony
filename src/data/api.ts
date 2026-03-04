@@ -236,15 +236,15 @@ export const api = {
         const data = (await res.json()) as { url: string }
         return data.url
       },
-      track: async (file: File): Promise<{ url: string; size?: number }> => {
+      track: async (file: File): Promise<{ url: string; size?: number; durationSeconds?: number }> => {
         const form = new FormData()
         form.append('file', file)
         const headers = getAuthHeaders()
         delete (headers as any)['Content-Type']
         const res = await fetch(`${API_BASE}${API_PREFIX}/content/upload/track`, { method: 'POST', headers, body: form })
         if (!res.ok) throw new Error(apiErrorMessage(res, await res.text()))
-        const data = (await res.json()) as { url: string; size?: number }
-        return { url: data.url, size: data.size }
+        const data = (await res.json()) as { url: string; size?: number; durationSeconds?: number }
+        return { url: data.url, size: data.size, durationSeconds: data.durationSeconds }
       },
       articleImage: async (file: File) => {
         const form = new FormData()
