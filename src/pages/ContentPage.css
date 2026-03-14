@@ -209,6 +209,17 @@
   flex-shrink: 0;
 }
 
+.content-list-thumb-placeholder {
+  background: #e2e8f0;
+  display: block;
+}
+
+.content-track-type {
+  font-weight: 600;
+  color: #0f172a;
+  margin-right: 2px;
+}
+
 .content-list-body {
   flex: 1;
   min-width: 0;

@@ -114,12 +114,14 @@ export interface ContentArticle {
   updatedAt: string
 }
 
-export interface ContentCourseTrack {
+export interface ContentCourseTrackItem {
   id: string
   courseId: string
-  trackId: string
+  title: string
+  descriptionShort: string
+  mediaUrl: string
   sortOrder: number
-  track: ContentTrack
+  createdAt: string
 }
 
 export interface ContentCourse {
@@ -132,7 +134,7 @@ export interface ContentCourse {
   isPublished: boolean
   createdAt: string
   updatedAt: string
-  tracks: ContentCourseTrack[]
+  courseTrackItems: ContentCourseTrackItem[]
 }
 
 function apiErrorMessage(res: Response, body?: string): string {
@@ -217,9 +219,9 @@ export const api = {
           `${API_BASE}${API_PREFIX}/content/courses${published !== undefined ? `?published=${published ? '1' : '0'}` : ''}`,
         ),
       getById: (id: string) => fetchJson<ContentCourse>(`${API_BASE}${API_PREFIX}/content/courses/${id}`),
-      create: (body: { title: string; descriptionShort?: string; descriptionFull?: string; imageUrl?: string; sortOrder?: number; isPublished?: boolean; trackIds?: string[] }) =>
+      create: (body: { title: string; descriptionShort?: string; descriptionFull?: string; imageUrl?: string; sortOrder?: number; isPublished?: boolean; tracks?: Array<{ title: string; descriptionShort?: string; mediaUrl: string }> }) =>
         fetchJson<ContentCourse>(`${API_BASE}${API_PREFIX}/content/courses`, { method: 'POST', body: JSON.stringify(body) }),
-      update: (id: string, body: Partial<{ title: string; descriptionShort: string; descriptionFull: string; imageUrl: string; sortOrder: number; isPublished: boolean; trackIds: string[] }>) =>
+      update: (id: string, body: Partial<{ title: string; descriptionShort: string; descriptionFull: string; imageUrl: string; sortOrder: number; isPublished: boolean; tracks: Array<{ title: string; descriptionShort?: string; mediaUrl: string }> }>) =>
         fetchJson<ContentCourse>(`${API_BASE}${API_PREFIX}/content/courses/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
       delete: (id: string) =>
         fetch(`${API_BASE}${API_PREFIX}/content/courses/${id}`, { method: 'DELETE', headers: getAuthHeaders() }).then((r) => { if (!r.ok) throw new Error(String(r.status)) }),
@@ -255,6 +257,16 @@ export const api = {
         if (!res.ok) throw new Error(apiErrorMessage(res, await res.text()))
         const data = (await res.json()) as { url: string }
         return data.url
+      },
+      courseTrack: async (file: File): Promise<{ url: string; size?: number }> => {
+        const form = new FormData()
+        form.append('file', file)
+        const headers = getAuthHeaders()
+        delete (headers as any)['Content-Type']
+        const res = await fetch(`${API_BASE}${API_PREFIX}/content/upload/course-track`, { method: 'POST', headers, body: form })
+        if (!res.ok) throw new Error(apiErrorMessage(res, await res.text()))
+        const data = (await res.json()) as { url: string; size?: number }
+        return { url: data.url, size: data.size }
       },
     },
   },

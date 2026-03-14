@@ -44,6 +44,8 @@ export default function DashboardPage() {
   const [cards, setCards] = useState<ContentArticle[]>([])
   const [popularTracks, setPopularTracks] = useState<ContentTrack[]>([])
   const [homeSections, setHomeSections] = useState<ContentSection[]>([])
+  const [meditationSections, setMeditationSections] = useState<ContentSection[]>([])
+  const [sleepSections, setSleepSections] = useState<ContentSection[]>([])
   const [courses, setCourses] = useState<ContentCourse[]>([])
   const [allTracks, setAllTracks] = useState<ContentTrack[]>([])
   const [loading, setLoading] = useState(true)
@@ -63,13 +65,21 @@ export default function DashboardPage() {
   const [courseFormOpen, setCourseFormOpen] = useState(false)
   const [editingCourseId, setEditingCourseId] = useState<string | null>(null)
   const [savingCourse, setSavingCourse] = useState(false)
-  const [courseForm, setCourseForm] = useState({
+  const [uploadingTrackIdx, setUploadingTrackIdx] = useState<number | null>(null)
+  const [courseForm, setCourseForm] = useState<{
+    title: string
+    descriptionShort: string
+    descriptionFull: string
+    imageUrl: string
+    isPublished: boolean
+    tracks: Array<{ title: string; descriptionShort: string; mediaUrl: string }>
+  }>({
     title: '',
     descriptionShort: '',
     descriptionFull: '',
     imageUrl: '',
     isPublished: true,
-    trackIds: [] as string[],
+    tracks: [],
   })
 
   const loadAll = () => {
@@ -78,13 +88,17 @@ export default function DashboardPage() {
       api.content.articles.get(BLOCK_TYPE),
       api.content.tracks.popular(10),
       api.content.sections.get('HOME'),
+      api.content.sections.get('MEDITATION'),
+      api.content.sections.get('SLEEP'),
       api.content.courses.get(),
       api.content.tracks.get(),
     ])
-      .then(([articles, popular, homeSectionsList, coursesList, tracks]) => {
+      .then(([articles, popular, homeSectionsList, meditationList, sleepList, coursesList, tracks]) => {
         setCards(articles)
         setPopularTracks(popular)
         setHomeSections(homeSectionsList)
+        setMeditationSections(meditationList)
+        setSleepSections(sleepList)
         setCourses(coursesList)
         setAllTracks(tracks)
         setError(null)
@@ -92,6 +106,9 @@ export default function DashboardPage() {
       .catch((e) => setError(e instanceof Error ? e.message : 'Ошибка загрузки'))
       .finally(() => setLoading(false))
   }
+
+  const meditationTracks = allTracks.filter((t) => t.section?.type === 'MEDITATION')
+  const sleepTracks = allTracks.filter((t) => t.section?.type === 'SLEEP')
 
   useEffect(() => {
     loadAll()
@@ -159,7 +176,7 @@ export default function DashboardPage() {
       descriptionFull: '',
       imageUrl: '',
       isPublished: true,
-      trackIds: [],
+      tracks: [],
     })
     setCourseFormOpen(true)
   }
@@ -172,14 +189,69 @@ export default function DashboardPage() {
       descriptionFull: c.descriptionFull ?? '',
       imageUrl: c.imageUrl ?? '',
       isPublished: c.isPublished,
-      trackIds: c.tracks.map((t) => t.trackId),
+      tracks: (c.courseTrackItems ?? []).map((t) => ({
+        title: t.title,
+        descriptionShort: t.descriptionShort ?? '',
+        mediaUrl: t.mediaUrl,
+      })),
     })
     setCourseFormOpen(true)
+  }
+
+  const addCourseTrack = () => {
+    if (courseForm.tracks.length >= 10) {
+      alert('Максимум 10 треков в курсе')
+      return
+    }
+    setCourseForm((f) => ({
+      ...f,
+      tracks: [...f.tracks, { title: '', descriptionShort: '', mediaUrl: '' }],
+    }))
+  }
+
+  const removeCourseTrack = (idx: number) => {
+    setCourseForm((f) => ({
+      ...f,
+      tracks: f.tracks.filter((_, i) => i !== idx),
+    }))
+  }
+
+  const updateCourseTrack = (idx: number, field: 'title' | 'descriptionShort' | 'mediaUrl', value: string) => {
+    setCourseForm((f) => ({
+      ...f,
+      tracks: f.tracks.map((t, i) => (i === idx ? { ...t, [field]: value } : t)),
+    }))
+  }
+
+  const handleCourseTrackFile = (idx: number, e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const sizeMB = file.size / 1024 / 1024
+    if (sizeMB > 200) {
+      alert(`Файл слишком большой (${sizeMB.toFixed(1)} МБ). Максимум 200 МБ.`)
+      return
+    }
+    const ext = file.name.toLowerCase().match(/\.(mp4|m4a|mp3|wav|ogg|webm)$/)?.[0]
+    if (!ext) {
+      alert('Разрешены только: .mp4, .m4a, .mp3, .wav, .ogg, .webm')
+      return
+    }
+    setUploadingTrackIdx(idx)
+    api.content.upload.courseTrack(file)
+      .then(({ url }) => updateCourseTrack(idx, 'mediaUrl', url))
+      .catch((err) => alert(err instanceof Error ? err.message : 'Ошибка загрузки'))
+      .finally(() => setUploadingTrackIdx(null))
+    e.target.value = ''
   }
 
   const submitCourse = (e: React.FormEvent) => {
     e.preventDefault()
     if (!courseForm.title.trim()) return
+    const validTracks = courseForm.tracks.filter((t) => t.mediaUrl && t.title.trim())
+    if (validTracks.some((t) => !t.mediaUrl || !t.title.trim())) {
+      alert('У каждого трека должны быть название и загруженный файл')
+      return
+    }
     setSavingCourse(true)
     const payload = {
       title: courseForm.title.trim(),
@@ -187,7 +259,11 @@ export default function DashboardPage() {
       descriptionFull: courseForm.descriptionFull.trim() || undefined,
       imageUrl: courseForm.imageUrl.trim() || undefined,
       isPublished: courseForm.isPublished,
-      trackIds: courseForm.trackIds,
+      tracks: validTracks.map((t) => ({
+        title: t.title.trim(),
+        descriptionShort: t.descriptionShort.trim() || undefined,
+        mediaUrl: t.mediaUrl,
+      })),
     }
     const promise = editingCourseId
       ? api.content.courses.update(editingCourseId, payload)
@@ -271,6 +347,86 @@ export default function DashboardPage() {
 
       <section className="card-section">
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+          <h2>Раздел в приложении: Медитации</h2>
+          <Link to="/content?tab=sections" className="btn-secondary" style={{ textDecoration: 'none', marginRight: 8 }}>Секции</Link>
+          <Link to="/content?tab=tracks" className="btn-primary" style={{ textDecoration: 'none', color: 'inherit' }}>
+            <Plus size={18} /> Контент → Треки
+          </Link>
+        </div>
+        <p style={{ color: '#64748b', marginBottom: 16 }}>
+          Карточки с треками для окна «Медитации» в приложении (обложка, название, уровень; иконка медитации слева сверху). Создайте секцию типа «Медитации» во вкладке Контент → Секции, затем добавляйте треки во вкладке Контент → Треки.
+        </p>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          {meditationSections.length === 0 ? (
+            <div style={{ padding: 24, background: '#f8fafc', borderRadius: 12, color: '#64748b' }}>
+              Нет секций типа «Медитации». Добавьте секцию во вкладке <Link to="/content?tab=sections">Контент → Секции</Link> (тип: Медитации).
+            </div>
+          ) : meditationSections.map((section) => (
+            <div key={section.id} style={{ padding: 16, background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12 }}>
+              <div style={{ fontWeight: 700, marginBottom: 8 }}>{section.name}</div>
+              <div style={{ fontSize: 13, color: '#64748b', marginBottom: 12 }}>slug: {section.slug} · треков: {section._count?.tracks ?? 0}</div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>
+                {meditationTracks.filter((t) => t.sectionId === section.id).length === 0 ? (
+                  <span style={{ fontSize: 13, color: '#94a3b8' }}>Треков пока нет</span>
+                ) : meditationTracks.filter((t) => t.sectionId === section.id).map((track) => (
+                  <div key={track.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: 10, background: '#f8fafc', borderRadius: 8, minWidth: 200 }}>
+                    <div style={{ width: 48, height: 48, borderRadius: 8, overflow: 'hidden', flexShrink: 0 }}>
+                      <CardCover imageUrl={track.coverUrl} />
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontWeight: 600, fontSize: 14 }}>{track.title}</div>
+                      <div style={{ fontSize: 12, color: '#64748b' }}>{track.level || '—'} {track.isPremium ? '· Премиум' : ''}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section className="card-section">
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+          <h2>Раздел в приложении: Сон</h2>
+          <Link to="/content?tab=sections" className="btn-secondary" style={{ textDecoration: 'none', marginRight: 8 }}>Секции</Link>
+          <Link to="/content?tab=tracks" className="btn-primary" style={{ textDecoration: 'none', color: 'inherit' }}>
+            <Plus size={18} /> Контент → Треки
+          </Link>
+        </div>
+        <p style={{ color: '#64748b', marginBottom: 16 }}>
+          Карточки с треками для окна «Сон» в приложении (обложка, название, уровень; иконка сна слева сверху). Создайте секцию типа «Сон» во вкладке Контент → Секции, затем добавляйте треки во вкладке Контент → Треки.
+        </p>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          {sleepSections.length === 0 ? (
+            <div style={{ padding: 24, background: '#f8fafc', borderRadius: 12, color: '#64748b' }}>
+              Нет секций типа «Сон». Добавьте секцию во вкладке <Link to="/content?tab=sections">Контент → Секции</Link> (тип: Сон).
+            </div>
+          ) : sleepSections.map((section) => (
+            <div key={section.id} style={{ padding: 16, background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12 }}>
+              <div style={{ fontWeight: 700, marginBottom: 8 }}>{section.name}</div>
+              <div style={{ fontSize: 13, color: '#64748b', marginBottom: 12 }}>slug: {section.slug} · треков: {section._count?.tracks ?? 0}</div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>
+                {sleepTracks.filter((t) => t.sectionId === section.id).length === 0 ? (
+                  <span style={{ fontSize: 13, color: '#94a3b8' }}>Треков пока нет</span>
+                ) : sleepTracks.filter((t) => t.sectionId === section.id).map((track) => (
+                  <div key={track.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: 10, background: '#f8fafc', borderRadius: 8, minWidth: 200 }}>
+                    <div style={{ width: 48, height: 48, borderRadius: 8, overflow: 'hidden', flexShrink: 0 }}>
+                      <CardCover imageUrl={track.coverUrl} />
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontWeight: 600, fontSize: 14 }}>{track.title}</div>
+                      <div style={{ fontSize: 12, color: '#64748b' }}>{track.level || '—'} {track.isPremium ? '· Премиум' : ''}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section className="card-section">
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
           <h2>Раздел в приложении: «Популярные от Harmony»</h2>
         </div>
         <p style={{ color: '#64748b', marginBottom: 16 }}>
@@ -335,7 +491,7 @@ export default function DashboardPage() {
           </button>
         </div>
         <p style={{ color: '#64748b', marginBottom: 16 }}>
-          В курсе можно выбрать треки из общего списка. В приложении карточка курса показывает обложку и текст снизу.
+          Загружайте треки для курса (mp4, m4a, mp3, wav, ogg, webm). Максимум 10 треков, до 200 МБ на файл.
         </p>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           {courses.length === 0 ? (
@@ -348,7 +504,7 @@ export default function DashboardPage() {
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontWeight: 700, marginBottom: 4 }}>{course.title}</div>
                 <div style={{ fontSize: 13, color: '#64748b' }}>{course.descriptionShort || 'Без описания'}</div>
-                <div style={{ fontSize: 12, color: '#334155', marginTop: 4 }}>Треков в курсе: {course.tracks.length}</div>
+                <div style={{ fontSize: 12, color: '#334155', marginTop: 4 }}>Треков в курсе: {course.courseTrackItems?.length ?? 0}</div>
               </div>
               <div style={{ display: 'flex', gap: 8 }}>
                 <button type="button" className="btn-secondary" onClick={() => openEditCourse(course)}><Pencil size={16} /></button>
@@ -423,26 +579,29 @@ export default function DashboardPage() {
               </div>
               <div style={{ marginBottom: 12 }}>
                 <label style={{ display: 'block', marginBottom: 8, fontWeight: 500 }}>Треки курса</label>
-                <div style={{ maxHeight: 180, overflow: 'auto', border: '1px solid #e2e8f0', borderRadius: 8, padding: 10 }}>
-                  {allTracks.map((track) => {
-                    const checked = courseForm.trackIds.includes(track.id)
-                    return (
-                      <label key={track.id} style={{ display: 'block', marginBottom: 8 }}>
-                        <input
-                          type="checkbox"
-                          checked={checked}
-                          onChange={(e) => {
-                            const next = new Set(courseForm.trackIds)
-                            if (e.target.checked) next.add(track.id)
-                            else next.delete(track.id)
-                            setCourseForm((f) => ({ ...f, trackIds: Array.from(next) }))
-                          }}
-                        />{' '}
-                        {track.title}
-                      </label>
-                    )
-                  })}
-                </div>
+                <p style={{ fontSize: 12, color: '#64748b', marginBottom: 8 }}>mp4, m4a, mp3, wav, ogg, webm — до 200 МБ. Максимум 10 треков.</p>
+                {courseForm.tracks.map((track, idx) => (
+                  <div key={idx} style={{ marginBottom: 12, padding: 12, border: '1px solid #e2e8f0', borderRadius: 8 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                      <strong>Трек {idx + 1}</strong>
+                      <button type="button" className="btn-danger" style={{ padding: '4px 8px', fontSize: 12 }} onClick={() => removeCourseTrack(idx)}>Удалить</button>
+                    </div>
+                    <div style={{ marginBottom: 8 }}>
+                      <input type="text" placeholder="Название трека" value={track.title} onChange={(e) => updateCourseTrack(idx, 'title', e.target.value)} required style={{ width: '100%', padding: 8, border: '1px solid #e2e8f0', borderRadius: 8 }} />
+                    </div>
+                    <div style={{ marginBottom: 8 }}>
+                      <input type="text" placeholder="Краткое описание" value={track.descriptionShort} onChange={(e) => updateCourseTrack(idx, 'descriptionShort', e.target.value)} style={{ width: '100%', padding: 8, border: '1px solid #e2e8f0', borderRadius: 8 }} />
+                    </div>
+                    <div>
+                      <input type="file" accept=".mp4,.m4a,.mp3,.wav,.ogg,.webm" onChange={(e) => handleCourseTrackFile(idx, e)} style={{ marginBottom: 4 }} disabled={uploadingTrackIdx === idx} />
+                      {uploadingTrackIdx === idx && <span style={{ fontSize: 12, color: '#64748b' }}> Загрузка…</span>}
+                      {track.mediaUrl && <span style={{ fontSize: 12, color: '#22c55e' }}> ✓ Файл загружен</span>}
+                    </div>
+                  </div>
+                ))}
+                <button type="button" className="btn-secondary" onClick={addCourseTrack} disabled={courseForm.tracks.length >= 10} style={{ marginTop: 8 }}>
+                  + Добавить трек
+                </button>
               </div>
               <div style={{ marginBottom: 16 }}>
                 <label>

@@ -11,6 +11,15 @@ const SECTION_TYPES = [
   { value: 'SLEEP', label: 'Сон' },
   { value: 'HOME', label: 'Главная (Гармония, Расслабление, Осознанность, Энергия)' },
 ]
+
+function sectionTypeLabel(type: string): string {
+  switch (type) {
+    case 'MEDITATION': return 'Медитации'
+    case 'SLEEP': return 'Сон'
+    case 'HOME': return 'Главная'
+    default: return type
+  }
+}
 const ARTICLE_BLOCK_TYPES = [
   { value: 'FEATURED', label: 'Главная (избранное)' },
   { value: 'RECOMMENDED', label: 'Рекомендуемое' },
@@ -235,7 +244,7 @@ function SectionsTab({ sections, onReload }: { sections: ContentSection[]; onRel
                   <strong>{s.name}</strong>
                   <span className="content-meta">
                     {' '}
-                    {s.slug} · {s.type} · порядок {s.sortOrder}
+                    {s.slug} · <span title={s.type}>{sectionTypeLabel(s.type)}</span> · порядок {s.sortOrder}
                   </span>
                 </div>
                 <div className="content-list-actions">
@@ -409,16 +418,24 @@ function TracksTab({
         <div className="content-form-card content-form-card-wide">
           <h3>{editing ? 'Редактировать трек' : 'Новый трек'}</h3>
           <div className="content-form-grid">
-            <label>Раздел</label>
+            <label>Раздел (Медитации / Сон / Главная — в приложении отображается иконка слева сверху)</label>
             <select
               value={form.sectionId}
               onChange={(e) => setForm((f) => ({ ...f, sectionId: e.target.value }))}
             >
-              {sections.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.name}
-                </option>
-              ))}
+              {(['MEDITATION', 'SLEEP', 'HOME'] as const).map((type) => {
+                const list = sections.filter((s) => s.type === type)
+                if (list.length === 0) return null
+                return (
+                  <optgroup key={type} label={sectionTypeLabel(type)}>
+                    {list.map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.name} ({s.slug})
+                      </option>
+                    ))}
+                  </optgroup>
+                )
+              })}
             </select>
             <label>Название</label>
             <input
@@ -504,25 +521,33 @@ function TracksTab({
         ) : (
           [...tracks]
             .sort((a, b) => a.sortOrder - b.sortOrder)
-            .map((t) => (
-              <div key={t.id} className="content-list-item content-track-item">
-                {t.coverUrl && (
-                  <img src={getMediaUrl(t.coverUrl)} alt="" className="content-list-thumb" />
-                )}
-                <div className="content-list-body">
-                  <strong>{t.title}</strong>
-                  <span className="content-meta">
-                    {sectionMap[t.sectionId]?.name ?? t.sectionId} ·{' '}
-                    {t.audioUrl ? 'есть аудио' : 'нет аудио'}
-                  </span>
+            .map((t) => {
+              const sec = sectionMap[t.sectionId]
+              const typeLabel = sec ? sectionTypeLabel(sec.type) : '—'
+              return (
+                <div key={t.id} className="content-list-item content-track-item">
+                  <div className="content-track-cover">
+                    {t.coverUrl ? (
+                      <img src={getMediaUrl(t.coverUrl)} alt="" className="content-list-thumb" />
+                    ) : (
+                      <div className="content-list-thumb content-list-thumb-placeholder" />
+                    )}
+                  </div>
+                  <div className="content-list-body">
+                    <strong>{t.title}</strong>
+                    <span className="content-meta">
+                      <span className="content-track-type">{typeLabel}</span>
+                      {sec ? ` · ${sec.name}` : ''} · {t.level || '—'} · {t.audioUrl ? 'есть аудио' : 'нет аудио'}
+                    </span>
+                  </div>
+                  <div className="content-list-actions">
+                    <button type="button" className="content-btn-small" onClick={() => openEdit(t)}>
+                      Изменить
+                    </button>
+                  </div>
                 </div>
-                <div className="content-list-actions">
-                  <button type="button" className="content-btn-small" onClick={() => openEdit(t)}>
-                    Изменить
-                  </button>
-                </div>
-              </div>
-            ))
+              )
+            })
         )}
       </div>
     </section>
