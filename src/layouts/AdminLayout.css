@@ -106,4 +106,6 @@
   background: #f8f9fa;
   min-height: 100vh;
   max-width: 1600px;
+  min-width: 0;
+  overflow-x: hidden;
 }

@@ -492,6 +492,7 @@
   margin-bottom: 20px;
   flex-wrap: wrap;
   gap: 12px;
+  min-width: 0;
 }
 
 .main-block-header h2 {
