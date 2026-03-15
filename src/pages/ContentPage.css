@@ -257,3 +257,187 @@
   color: #757575;
   margin-bottom: 16px;
 }
+
+/* Широкая страница контента */
+.content-page-wide {
+  max-width: 1400px;
+}
+
+/* Split layout: слева — разделы, справа — треки */
+.split-sections-layout {
+  display: grid;
+  grid-template-columns: 320px 1fr;
+  gap: 24px;
+  min-height: 480px;
+  align-items: start;
+}
+
+.split-left {
+  background: #fff;
+  border: 1px solid #e5e5e5;
+  border-radius: 12px;
+  padding: 20px;
+  position: sticky;
+  top: 24px;
+}
+
+.split-right {
+  background: #fff;
+  border: 1px solid #e5e5e5;
+  border-radius: 12px;
+  padding: 20px;
+  min-width: 0;
+}
+
+.split-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.split-panel-header h2 {
+  font-size: 16px;
+  font-weight: 600;
+  color: #202020;
+  margin: 0;
+}
+
+.add-btn-small {
+  padding: 6px 12px;
+  font-size: 13px;
+}
+
+.content-btn-small {
+  padding: 6px 12px;
+  font-size: 13px;
+}
+
+.content-btn-icon {
+  padding: 4px 8px;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  cursor: pointer;
+  color: #757575;
+}
+
+.content-btn-icon:hover {
+  background: #f5f5f5;
+  color: #202020;
+}
+
+.split-sections-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.split-section-item {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  width: 100%;
+  padding: 12px 14px;
+  background: #f8f9fa;
+  border: 1px solid #e8e8e8;
+  border-radius: 10px;
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.2s;
+}
+
+.split-section-item:hover {
+  background: #f0f0f0;
+  border-color: #e0e0e0;
+}
+
+.split-section-item.active {
+  background: #202020;
+  border-color: #202020;
+  color: #fff;
+}
+
+.split-section-item.active .split-section-meta {
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.split-section-item.active .content-btn-icon {
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.split-section-item.active .content-btn-icon:hover {
+  background: rgba(255, 255, 255, 0.15);
+  color: #fff;
+}
+
+.split-section-name {
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.split-section-meta {
+  font-size: 12px;
+  color: #757575;
+  margin-top: 2px;
+}
+
+.split-section-actions {
+  margin-top: 8px;
+  width: 100%;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.content-form-compact .content-form-grid-compact {
+  grid-template-columns: 80px 1fr;
+  gap: 8px 12px;
+  max-width: none;
+}
+
+.content-form-compact h3 {
+  font-size: 15px;
+  margin-bottom: 12px;
+}
+
+.content-form-actions-compact {
+  margin-top: 12px;
+}
+
+.content-form-track .content-form-grid-wide {
+  grid-template-columns: 100px 1fr;
+  max-width: none;
+}
+
+.split-tracks-list {
+  max-height: 520px;
+  overflow-y: auto;
+}
+
+.empty-section-small {
+  padding: 24px 16px;
+  font-size: 13px;
+}
+
+.content-form-grid-articles {
+  grid-template-columns: 140px 1fr;
+  max-width: 640px;
+}
+
+.articles-section {
+  max-width: 800px;
+}
+
+@media (max-width: 900px) {
+  .split-sections-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .split-left {
+    position: static;
+  }
+}

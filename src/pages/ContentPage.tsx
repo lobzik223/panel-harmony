@@ -1,25 +1,18 @@
 import { useState, useEffect, useCallback } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useSearchParams, useNavigate } from 'react-router-dom'
 import { api, getMediaUrl, type ContentSection, type ContentTrack, type ContentArticle } from '../data/api'
 import './SectionPage.css'
 import './ContentPage.css'
 
-type Tab = 'sections' | 'tracks' | 'articles'
+type ContentTab = 'meditation' | 'sleep' | 'home' | 'articles'
 
-const SECTION_TYPES = [
-  { value: 'MEDITATION', label: 'Медитации' },
-  { value: 'SLEEP', label: 'Сон' },
-  { value: 'HOME', label: 'Главная (Гармония, Расслабление, Осознанность, Энергия)' },
+const CONTENT_TABS: { value: ContentTab; label: string; type: string }[] = [
+  { value: 'meditation', label: 'Медитации', type: 'MEDITATION' },
+  { value: 'sleep', label: 'Сон', type: 'SLEEP' },
+  { value: 'home', label: 'Главная (Гармония)', type: 'HOME' },
+  { value: 'articles', label: 'Статьи', type: '' },
 ]
 
-function sectionTypeLabel(type: string): string {
-  switch (type) {
-    case 'MEDITATION': return 'Медитации'
-    case 'SLEEP': return 'Сон'
-    case 'HOME': return 'Главная'
-    default: return type
-  }
-}
 const ARTICLE_BLOCK_TYPES = [
   { value: 'FEATURED', label: 'Главная (избранное)' },
   { value: 'RECOMMENDED', label: 'Рекомендуемое' },
@@ -28,30 +21,17 @@ const ARTICLE_BLOCK_TYPES = [
 
 export default function ContentPage() {
   const [searchParams] = useSearchParams()
-  const tabFromUrl = searchParams.get('tab') as Tab | null
-  const [tab, setTab] = useState<Tab>(tabFromUrl && ['sections', 'tracks', 'articles'].includes(tabFromUrl) ? tabFromUrl : 'sections')
+  const navigate = useNavigate()
+  const tabFromUrl = searchParams.get('tab') as ContentTab | null
+  const [tab, setTab] = useState<ContentTab>(
+    tabFromUrl && CONTENT_TABS.some((t) => t.value === tabFromUrl) ? tabFromUrl : 'meditation',
+  )
   const [sections, setSections] = useState<ContentSection[]>([])
   const [tracks, setTracks] = useState<ContentTrack[]>([])
   const [articles, setArticles] = useState<ContentArticle[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  const loadSections = useCallback(async () => {
-    try {
-      const data = await api.content.sections.get()
-      setSections(data)
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Ошибка загрузки секций')
-    }
-  }, [])
-  const loadTracks = useCallback(async () => {
-    try {
-      const data = await api.content.tracks.get()
-      setTracks(data)
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Ошибка загрузки треков')
-    }
-  }, [])
   const loadArticles = useCallback(async () => {
     try {
       const data = await api.content.articles.get()
@@ -61,40 +41,55 @@ export default function ContentPage() {
     }
   }, [])
 
-  const load = useCallback(async () => {
+  const loadAll = useCallback(async () => {
     setLoading(true)
     setError(null)
-    await Promise.all([loadSections(), loadTracks(), loadArticles()])
-    setLoading(false)
-  }, [loadSections, loadTracks, loadArticles])
+    try {
+      const [secs, trks] = await Promise.all([
+        api.content.sections.get(),
+        api.content.tracks.get(),
+      ])
+      setSections(secs)
+      setTracks(trks)
+      await loadArticles()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Ошибка загрузки')
+    } finally {
+      setLoading(false)
+    }
+  }, [loadArticles])
 
   useEffect(() => {
-    load()
-  }, [load])
+    loadAll()
+  }, [loadAll])
 
   useEffect(() => {
-    const t = searchParams.get('tab') as Tab | null
-    if (t && (t === 'sections' || t === 'tracks' || t === 'articles')) setTab(t)
+    const t = searchParams.get('tab') as ContentTab | null
+    if (t && CONTENT_TABS.some((x) => x.value === t)) setTab(t)
   }, [searchParams])
 
+  const currentTabConfig = CONTENT_TABS.find((t) => t.value === tab)!
+  const sectionsForType = sections.filter((s) => s.type === currentTabConfig.type)
+
   return (
-    <div className="section-page content-page">
+    <div className="section-page content-page content-page-wide">
       <header className="page-header">
         <h1>Контент</h1>
         <p>Секции, треки и статьи для главного экрана приложения</p>
       </header>
 
       <div className="content-tabs">
-        {(['sections', 'tracks', 'articles'] as const).map((t) => (
+        {CONTENT_TABS.map((t) => (
           <button
-            key={t}
+            key={t.value}
             type="button"
-            className={`content-tab ${tab === t ? 'active' : ''}`}
-            onClick={() => setTab(t)}
+            className={`content-tab ${tab === t.value ? 'active' : ''}`}
+            onClick={() => {
+              setTab(t.value)
+              navigate(`/content?tab=${t.value}`, { replace: true })
+            }}
           >
-            {t === 'sections' && 'Секции'}
-            {t === 'tracks' && 'Треки'}
-            {t === 'articles' && 'Статьи'}
+            {t.label}
           </button>
         ))}
       </div>
@@ -110,173 +105,46 @@ export default function ContentPage() {
 
       {loading ? (
         <div className="page-loading">Загрузка...</div>
+      ) : tab === 'articles' ? (
+        <ArticlesTab articles={articles} onReload={loadArticles} />
       ) : (
-        <>
-          {tab === 'sections' && <SectionsTab sections={sections} onReload={loadSections} />}
-          {tab === 'tracks' && (
-            <TracksTab sections={sections} tracks={tracks} onReload={loadTracks} />
-          )}
-          {tab === 'articles' && <ArticlesTab articles={articles} onReload={loadArticles} />}
-        </>
+        <SplitSectionsTab
+          type={currentTabConfig.type}
+          typeLabel={currentTabConfig.label}
+          sections={sectionsForType}
+          tracks={tracks}
+          onReload={loadAll}
+        />
       )}
     </div>
   )
 }
 
-function SectionsTab({ sections, onReload }: { sections: ContentSection[]; onReload: () => void }) {
-  const [editing, setEditing] = useState<ContentSection | null>(null)
-  const [creating, setCreating] = useState(false)
-  const [saving, setSaving] = useState(false)
-  const [form, setForm] = useState({ name: '', slug: '', type: 'MEDITATION', sortOrder: 0 })
-
-  const openEdit = (s: ContentSection) => {
-    setEditing(s)
-    setCreating(false)
-    setForm({ name: s.name, slug: s.slug, type: s.type, sortOrder: s.sortOrder })
-  }
-  const openCreate = () => {
-    setEditing(null)
-    setCreating(true)
-    setForm({ name: '', slug: '', type: 'MEDITATION', sortOrder: sections.length })
-  }
-  const closeForm = () => {
-    setEditing(null)
-    setCreating(false)
-  }
-
-  const save = async () => {
-    setSaving(true)
-    try {
-      if (editing) {
-        await api.content.sections.update(editing.id, form)
-      } else {
-        await api.content.sections.create(form)
-      }
-      closeForm()
-      onReload()
-    } catch (e) {
-      alert(e instanceof Error ? e.message : 'Ошибка сохранения')
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  const remove = async (id: string) => {
-    if (!confirm('Удалить секцию? Треки останутся без раздела.')) return
-    try {
-      await api.content.sections.delete(id)
-      closeForm()
-      onReload()
-    } catch (e) {
-      alert(e instanceof Error ? e.message : 'Ошибка удаления')
-    }
-  }
-
-  const showForm = creating || editing
-
-  return (
-    <section className="card-section">
-      <div className="section-title-row">
-        <h2>Разделы (медитации / сон)</h2>
-        <button type="button" className="add-btn" onClick={openCreate}>
-          + Добавить секцию
-        </button>
-      </div>
-
-      {showForm && (
-        <div className="content-form-card">
-          <h3>{editing ? 'Редактировать секцию' : 'Новая секция'}</h3>
-          <div className="content-form-grid">
-            <label>Название</label>
-            <input
-              value={form.name}
-              onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-              placeholder="Например: Утренние медитации"
-            />
-            <label>Slug (латиница)</label>
-            <input
-              value={form.slug}
-              onChange={(e) => setForm((f) => ({ ...f, slug: e.target.value }))}
-              placeholder="morning"
-            />
-            <label>Тип</label>
-            <select value={form.type} onChange={(e) => setForm((f) => ({ ...f, type: e.target.value }))}>
-              {SECTION_TYPES.map((o) => (
-                <option key={o.value} value={o.value}>
-                  {o.label}
-                </option>
-              ))}
-            </select>
-            <label>Порядок</label>
-            <input
-              type="number"
-              value={form.sortOrder}
-              onChange={(e) => setForm((f) => ({ ...f, sortOrder: Number(e.target.value) || 0 }))}
-            />
-          </div>
-          <div className="content-form-actions">
-            <button type="button" className="add-btn" onClick={save} disabled={saving}>
-              {saving ? 'Сохранение...' : 'Сохранить'}
-            </button>
-            {editing && (
-              <button type="button" className="content-btn-danger" onClick={() => remove(editing.id)}>
-                Удалить
-              </button>
-            )}
-            <button type="button" className="content-btn-secondary" onClick={closeForm}>
-              Отмена
-            </button>
-          </div>
-        </div>
-      )}
-
-      <div className="content-list">
-        {sections.length === 0 ? (
-          <div className="empty-section">
-            Нет секций. Добавьте секцию, чтобы привязать к ней треки.
-          </div>
-        ) : (
-          [...sections]
-            .sort((a, b) => a.sortOrder - b.sortOrder)
-            .map((s) => (
-              <div key={s.id} className="content-list-item">
-                <div>
-                  <strong>{s.name}</strong>
-                  <span className="content-meta">
-                    {' '}
-                    {s.slug} · <span title={s.type}>{sectionTypeLabel(s.type)}</span> · порядок {s.sortOrder}
-                  </span>
-                </div>
-                <div className="content-list-actions">
-                  <button type="button" className="content-btn-small" onClick={() => openEdit(s)}>
-                    Изменить
-                  </button>
-                </div>
-              </div>
-            ))
-        )}
-      </div>
-    </section>
-  )
-}
-
-function TracksTab({
+function SplitSectionsTab({
+  type,
+  typeLabel,
   sections,
   tracks,
   onReload,
 }: {
+  type: string
+  typeLabel: string
   sections: ContentSection[]
   tracks: ContentTrack[]
   onReload: () => void
 }) {
-  const [editing, setEditing] = useState<ContentTrack | null>(null)
-  const [creating, setCreating] = useState(false)
+  const [selectedSectionId, setSelectedSectionId] = useState<string | null>(null)
+  const [editingSection, setEditingSection] = useState<ContentSection | null>(null)
+  const [creatingSection, setCreatingSection] = useState(false)
+  const [sectionForm, setSectionForm] = useState({ name: '', slug: '', sortOrder: 0 })
+  const [editingTrack, setEditingTrack] = useState<ContentTrack | null>(null)
+  const [creatingTrack, setCreatingTrack] = useState(false)
   const [saving, setSaving] = useState(false)
   const [uploadingCover, setUploadingCover] = useState(false)
   const [uploadingAudio, setUploadingAudio] = useState(false)
   const [lastUploadSize, setLastUploadSize] = useState<number | null>(null)
-  const [form, setForm] = useState<Partial<ContentTrack> & { sectionId: string; title: string }>({
-    sectionId: sections[0]?.id ?? '',
+  const [trackForm, setTrackForm] = useState<Partial<ContentTrack> & { sectionId: string; title: string }>({
+    sectionId: '',
     title: '',
     descriptionShort: '',
     coverUrl: null,
@@ -287,11 +155,64 @@ function TracksTab({
     sortOrder: 0,
   })
 
-  const openEdit = (t: ContentTrack) => {
-    setEditing(t)
-    setCreating(false)
+  useEffect(() => {
+    if (sections.length > 0 && !selectedSectionId) {
+      setSelectedSectionId(sections[0].id)
+    }
+  }, [sections, selectedSectionId])
+
+  const selectedSection = sections.find((s) => s.id === selectedSectionId)
+  const sectionTracks = tracks.filter((t) => t.sectionId === selectedSectionId)
+
+  const openEditSection = (s: ContentSection) => {
+    setEditingSection(s)
+    setCreatingSection(false)
+    setSectionForm({ name: s.name, slug: s.slug, sortOrder: s.sortOrder })
+  }
+  const openCreateSection = () => {
+    setEditingSection(null)
+    setCreatingSection(true)
+    setSectionForm({ name: '', slug: '', sortOrder: sections.length })
+  }
+  const closeSectionForm = () => {
+    setEditingSection(null)
+    setCreatingSection(false)
+  }
+
+  const saveSection = async () => {
+    setSaving(true)
+    try {
+      if (editingSection) {
+        await api.content.sections.update(editingSection.id, { ...sectionForm, type })
+      } else {
+        await api.content.sections.create({ ...sectionForm, type })
+      }
+      closeSectionForm()
+      onReload()
+    } catch (e) {
+      alert(e instanceof Error ? e.message : 'Ошибка сохранения')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const removeSection = async (id: string) => {
+    if (!confirm('Удалить секцию? Треки останутся без раздела.')) return
+    try {
+      await api.content.sections.delete(id)
+      if (selectedSectionId === id) setSelectedSectionId(sections[0]?.id ?? null)
+      closeSectionForm()
+      onReload()
+    } catch (e) {
+      alert(e instanceof Error ? e.message : 'Ошибка удаления')
+    }
+  }
+
+  const openEditTrack = (t: ContentTrack) => {
+    setEditingTrack(t)
+    setCreatingTrack(false)
     setLastUploadSize(null)
-    setForm({
+    setTrackForm({
       sectionId: t.sectionId,
       title: t.title,
       descriptionShort: t.descriptionShort,
@@ -303,12 +224,16 @@ function TracksTab({
       sortOrder: t.sortOrder,
     })
   }
-  const openCreate = () => {
-    setEditing(null)
-    setCreating(true)
+  const openCreateTrack = () => {
+    if (!selectedSectionId) {
+      alert('Сначала выберите раздел слева')
+      return
+    }
+    setEditingTrack(null)
+    setCreatingTrack(true)
     setLastUploadSize(null)
-    setForm({
-      sectionId: sections[0]?.id ?? '',
+    setTrackForm({
+      sectionId: selectedSectionId,
       title: '',
       descriptionShort: '',
       coverUrl: null,
@@ -316,12 +241,12 @@ function TracksTab({
       durationSeconds: null,
       level: null,
       isPremium: false,
-      sortOrder: tracks.length,
+      sortOrder: sectionTracks.length,
     })
   }
-  const closeForm = () => {
-    setEditing(null)
-    setCreating(false)
+  const closeTrackForm = () => {
+    setEditingTrack(null)
+    setCreatingTrack(false)
   }
 
   const handleCover = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -330,7 +255,7 @@ function TracksTab({
     setUploadingCover(true)
     try {
       const url = await api.content.upload.cover(file)
-      setForm((f) => ({ ...f, coverUrl: url }))
+      setTrackForm((f) => ({ ...f, coverUrl: url }))
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Ошибка загрузки обложки')
     } finally {
@@ -343,7 +268,7 @@ function TracksTab({
     setUploadingAudio(true)
     try {
       const result = await api.content.upload.track(file)
-      setForm((f) => ({
+      setTrackForm((f) => ({
         ...f,
         audioUrl: result.url,
         durationSeconds: result.durationSeconds ?? f.durationSeconds ?? null,
@@ -362,19 +287,19 @@ function TracksTab({
     return `${(bytes / (1024 * 1024)).toFixed(2)} МБ`
   }
 
-  const save = async () => {
-    if (!form.sectionId || !form.title.trim()) {
+  const saveTrack = async () => {
+    if (!trackForm.sectionId || !trackForm.title.trim()) {
       alert('Укажите раздел и название')
       return
     }
     setSaving(true)
     try {
-      if (editing) {
-        await api.content.tracks.update(editing.id, form)
+      if (editingTrack) {
+        await api.content.tracks.update(editingTrack.id, trackForm)
       } else {
-        await api.content.tracks.create(form)
+        await api.content.tracks.create(trackForm)
       }
-      closeForm()
+      closeTrackForm()
       onReload()
     } catch (e) {
       alert(e instanceof Error ? e.message : 'Ошибка сохранения')
@@ -383,174 +308,253 @@ function TracksTab({
     }
   }
 
-  const remove = async (id: string) => {
+  const removeTrack = async (id: string) => {
     if (!confirm('Удалить трек?')) return
     try {
       await api.content.tracks.delete(id)
-      closeForm()
+      closeTrackForm()
       onReload()
     } catch (e) {
       alert(e instanceof Error ? e.message : 'Ошибка удаления')
     }
   }
 
-  const showForm = creating || editing
-  const sectionMap = Object.fromEntries(sections.map((s) => [s.id, s]))
+  const showSectionForm = creatingSection || editingSection
+  const showTrackForm = creatingTrack || editingTrack
 
   return (
-    <section className="card-section">
-      <div className="section-title-row">
-        <h2>Треки (аудиокарточки)</h2>
-        <button
-          type="button"
-          className="add-btn"
-          onClick={openCreate}
-          disabled={sections.length === 0}
-        >
-          + Добавить трек
-        </button>
-      </div>
-      {sections.length === 0 && (
-        <p className="content-hint">Сначала создайте секцию во вкладке «Секции».</p>
-      )}
-
-      {showForm && (
-        <div className="content-form-card content-form-card-wide">
-          <h3>{editing ? 'Редактировать трек' : 'Новый трек'}</h3>
-          <div className="content-form-grid">
-            <label>Раздел (Медитации / Сон / Главная — в приложении отображается иконка слева сверху)</label>
-            <select
-              value={form.sectionId}
-              onChange={(e) => setForm((f) => ({ ...f, sectionId: e.target.value }))}
-            >
-              {(['MEDITATION', 'SLEEP', 'HOME'] as const).map((type) => {
-                const list = sections.filter((s) => s.type === type)
-                if (list.length === 0) return null
-                return (
-                  <optgroup key={type} label={sectionTypeLabel(type)}>
-                    {list.map((s) => (
-                      <option key={s.id} value={s.id}>
-                        {s.name} ({s.slug})
-                      </option>
-                    ))}
-                  </optgroup>
-                )
-              })}
-            </select>
-            <label>Название</label>
-            <input
-              value={form.title}
-              onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
-              placeholder="Название трека"
-            />
-            <label>Краткое описание</label>
-            <textarea
-              value={form.descriptionShort ?? ''}
-              onChange={(e) => setForm((f) => ({ ...f, descriptionShort: e.target.value }))}
-              placeholder="Краткое описание"
-              rows={2}
-            />
-            <label>Обложка</label>
-            <div className="content-upload-row">
-              <input type="file" accept="image/*" onChange={handleCover} disabled={uploadingCover} />
-              {form.coverUrl && (
-                <img src={getMediaUrl(form.coverUrl)} alt="" className="content-preview-img" />
-              )}
-              {uploadingCover && <span>Загрузка...</span>}
-            </div>
-            <label>Аудиофайл</label>
-            <div className="content-upload-row">
-              <input type="file" accept="audio/*" onChange={handleAudio} disabled={uploadingAudio} />
-              {form.audioUrl && <span className="content-file-name">Файл загружен</span>}
-              {lastUploadSize != null && (
-                <span className="content-file-size">Размер: {formatSize(lastUploadSize)}</span>
-              )}
-              {uploadingAudio && <span>Загрузка...</span>}
-            </div>
-            {(form.durationSeconds != null && form.durationSeconds > 0) && (
-              <>
-                <label>Длительность</label>
-                <div className="content-readonly-value">
-                  {Math.floor(form.durationSeconds / 60)} мин {form.durationSeconds % 60 > 0 ? `${form.durationSeconds % 60} сек` : ''}
-                  <span className="content-hint-inline"> (определяется из аудиофайла)</span>
-                </div>
-              </>
-            )}
-            <label>Уровень</label>
-            <input
-              value={form.level ?? ''}
-              onChange={(e) => setForm((f) => ({ ...f, level: e.target.value || null }))}
-              placeholder="Например: начальный"
-            />
-            <label className="content-checkbox-label">
-              <input
-                type="checkbox"
-                checked={form.isPremium ?? false}
-                onChange={(e) => setForm((f) => ({ ...f, isPremium: e.target.checked }))}
-              />
-              Премиум
-            </label>
-            <label>Порядок</label>
-            <input
-              type="number"
-              value={form.sortOrder ?? 0}
-              onChange={(e) => setForm((f) => ({ ...f, sortOrder: Number(e.target.value) || 0 }))}
-            />
-          </div>
-          <div className="content-form-actions">
-            <button type="button" className="add-btn" onClick={save} disabled={saving}>
-              {saving ? 'Сохранение...' : 'Сохранить'}
-            </button>
-            {editing && (
-              <button type="button" className="content-btn-danger" onClick={() => remove(editing.id)}>
-                Удалить
-              </button>
-            )}
-            <button type="button" className="content-btn-secondary" onClick={closeForm}>
-              Отмена
-            </button>
-          </div>
+    <div className="split-sections-layout">
+      <div className="split-left">
+        <div className="split-panel-header">
+          <h2>Разделы {typeLabel}</h2>
+          <button type="button" className="add-btn add-btn-small" onClick={openCreateSection}>
+            + Добавить
+          </button>
         </div>
-      )}
 
-      <div className="content-list">
-        {tracks.length === 0 ? (
-          <div className="empty-section">
-            Нет треков. Добавьте трек и привяжите обложку и аудио.
+        {showSectionForm && (
+          <div className="content-form-card content-form-compact">
+            <h3>{editingSection ? 'Редактировать' : 'Новая секция'}</h3>
+            <div className="content-form-grid content-form-grid-compact">
+              <label>Название</label>
+              <input
+                value={sectionForm.name}
+                onChange={(e) => setSectionForm((f) => ({ ...f, name: e.target.value }))}
+                placeholder="Например: Утренние"
+              />
+              <label>Slug</label>
+              <input
+                value={sectionForm.slug}
+                onChange={(e) => setSectionForm((f) => ({ ...f, slug: e.target.value }))}
+                placeholder="morning"
+              />
+              <label>Порядок</label>
+              <input
+                type="number"
+                value={sectionForm.sortOrder}
+                onChange={(e) => setSectionForm((f) => ({ ...f, sortOrder: Number(e.target.value) || 0 }))}
+              />
+            </div>
+            <div className="content-form-actions content-form-actions-compact">
+              <button type="button" className="add-btn add-btn-small" onClick={saveSection} disabled={saving}>
+                {saving ? '...' : 'Сохранить'}
+              </button>
+              {editingSection && (
+                <button type="button" className="content-btn-danger content-btn-small" onClick={() => removeSection(editingSection.id)}>
+                  Удалить
+                </button>
+              )}
+              <button type="button" className="content-btn-secondary content-btn-small" onClick={closeSectionForm}>
+                Отмена
+              </button>
+            </div>
           </div>
-        ) : (
-          [...tracks]
-            .sort((a, b) => a.sortOrder - b.sortOrder)
-            .map((t) => {
-              const sec = sectionMap[t.sectionId]
-              const typeLabel = sec ? sectionTypeLabel(sec.type) : '—'
-              return (
-                <div key={t.id} className="content-list-item content-track-item">
-                  <div className="content-track-cover">
-                    {t.coverUrl ? (
-                      <img src={getMediaUrl(t.coverUrl)} alt="" className="content-list-thumb" />
-                    ) : (
-                      <div className="content-list-thumb content-list-thumb-placeholder" />
-                    )}
-                  </div>
-                  <div className="content-list-body">
-                    <strong>{t.title}</strong>
-                    <span className="content-meta">
-                      <span className="content-track-type">{typeLabel}</span>
-                      {sec ? ` · ${sec.name}` : ''} · {t.level || '—'} · {t.audioUrl ? 'есть аудио' : 'нет аудио'}
-                    </span>
-                  </div>
-                  <div className="content-list-actions">
-                    <button type="button" className="content-btn-small" onClick={() => openEdit(t)}>
-                      Изменить
+        )}
+
+        <div className="split-sections-list">
+          {sections.length === 0 ? (
+            <div className="empty-section empty-section-small">
+              Нет разделов. Добавьте раздел, чтобы привязать к нему треки.
+            </div>
+          ) : (
+            [...sections]
+              .sort((a, b) => a.sortOrder - b.sortOrder)
+              .map((s) => (
+                <button
+                  key={s.id}
+                  type="button"
+                  className={`split-section-item ${selectedSectionId === s.id ? 'active' : ''}`}
+                  onClick={() => setSelectedSectionId(s.id)}
+                >
+                  <span className="split-section-name">{s.name}</span>
+                  <span className="split-section-meta">{s.slug}</span>
+                  <div className="split-section-actions">
+                    <button
+                      type="button"
+                      className="content-btn-icon"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        openEditSection(s)
+                      }}
+                      title="Изменить"
+                    >
+                      ✎
                     </button>
                   </div>
-                </div>
-              )
-            })
+                </button>
+              ))
+          )}
+        </div>
+      </div>
+
+      <div className="split-right">
+        <div className="split-panel-header">
+          <h2>
+            Треки {selectedSection ? `— ${selectedSection.name}` : ''}
+          </h2>
+          <button
+            type="button"
+            className="add-btn add-btn-small"
+            onClick={openCreateTrack}
+            disabled={!selectedSectionId}
+          >
+            + Добавить трек
+          </button>
+        </div>
+
+        {!selectedSectionId && (
+          <div className="empty-section empty-section-small">
+            Выберите раздел слева, чтобы добавлять треки.
+          </div>
+        )}
+
+        {selectedSectionId && showTrackForm && (
+          <div className="content-form-card content-form-track">
+            <h3>{editingTrack ? 'Редактировать трек' : 'Новый трек'}</h3>
+            <div className="content-form-grid content-form-grid-wide">
+              <label>Раздел</label>
+              <select
+                value={trackForm.sectionId}
+                onChange={(e) => setTrackForm((f) => ({ ...f, sectionId: e.target.value }))}
+              >
+                {sections.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.name}
+                  </option>
+                ))}
+              </select>
+              <label>Название</label>
+              <input
+                value={trackForm.title}
+                onChange={(e) => setTrackForm((f) => ({ ...f, title: e.target.value }))}
+                placeholder="Название трека"
+              />
+              <label>Описание</label>
+              <textarea
+                value={trackForm.descriptionShort ?? ''}
+                onChange={(e) => setTrackForm((f) => ({ ...f, descriptionShort: e.target.value }))}
+                placeholder="Краткое описание"
+                rows={2}
+              />
+              <label>Обложка</label>
+              <div className="content-upload-row">
+                <input type="file" accept="image/*" onChange={handleCover} disabled={uploadingCover} />
+                {trackForm.coverUrl && (
+                  <img src={getMediaUrl(trackForm.coverUrl)} alt="" className="content-preview-img" />
+                )}
+                {uploadingCover && <span>Загрузка...</span>}
+              </div>
+              <label>Аудио</label>
+              <div className="content-upload-row">
+                <input type="file" accept="audio/*" onChange={handleAudio} disabled={uploadingAudio} />
+                {trackForm.audioUrl && <span className="content-file-name">Файл загружен</span>}
+                {lastUploadSize != null && (
+                  <span className="content-file-size">Размер: {formatSize(lastUploadSize)}</span>
+                )}
+                {uploadingAudio && <span>Загрузка...</span>}
+              </div>
+              {(trackForm.durationSeconds != null && trackForm.durationSeconds > 0) && (
+                <>
+                  <label>Длительность</label>
+                  <div className="content-readonly-value">
+                    {Math.floor(trackForm.durationSeconds / 60)} мин{' '}
+                    {trackForm.durationSeconds % 60 > 0 ? `${trackForm.durationSeconds % 60} сек` : ''}
+                  </div>
+                </>
+              )}
+              <label>Уровень</label>
+              <input
+                value={trackForm.level ?? ''}
+                onChange={(e) => setTrackForm((f) => ({ ...f, level: e.target.value || null }))}
+                placeholder="Например: начальный"
+              />
+              <label className="content-checkbox-label">
+                <input
+                  type="checkbox"
+                  checked={trackForm.isPremium ?? false}
+                  onChange={(e) => setTrackForm((f) => ({ ...f, isPremium: e.target.checked }))}
+                />
+                Премиум
+              </label>
+              <label>Порядок</label>
+              <input
+                type="number"
+                value={trackForm.sortOrder ?? 0}
+                onChange={(e) => setTrackForm((f) => ({ ...f, sortOrder: Number(e.target.value) || 0 }))}
+              />
+            </div>
+            <div className="content-form-actions">
+              <button type="button" className="add-btn add-btn-small" onClick={saveTrack} disabled={saving}>
+                {saving ? 'Сохранение...' : 'Сохранить'}
+              </button>
+              {editingTrack && (
+                <button type="button" className="content-btn-danger content-btn-small" onClick={() => removeTrack(editingTrack.id)}>
+                  Удалить
+                </button>
+              )}
+              <button type="button" className="content-btn-secondary content-btn-small" onClick={closeTrackForm}>
+                Отмена
+              </button>
+            </div>
+          </div>
+        )}
+
+        {selectedSectionId && !showTrackForm && (
+          <div className="content-list split-tracks-list">
+            {sectionTracks.length === 0 ? (
+              <div className="empty-section empty-section-small">
+                Нет треков. Нажмите «+ Добавить трек», чтобы создать карточку.
+              </div>
+            ) : (
+              [...sectionTracks]
+                .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0))
+                .map((t) => (
+                  <div key={t.id} className="content-list-item content-track-item">
+                    <div className="content-track-cover">
+                      {t.coverUrl ? (
+                        <img src={getMediaUrl(t.coverUrl)} alt="" className="content-list-thumb" />
+                      ) : (
+                        <div className="content-list-thumb content-list-thumb-placeholder" />
+                      )}
+                    </div>
+                    <div className="content-list-body">
+                      <strong>{t.title}</strong>
+                      <span className="content-meta">
+                        {t.level || '—'} · {t.audioUrl ? 'есть аудио' : 'нет аудио'}
+                      </span>
+                    </div>
+                    <div className="content-list-actions">
+                      <button type="button" className="content-btn-small" onClick={() => openEditTrack(t)}>
+                        Изменить
+                      </button>
+                    </div>
+                  </div>
+                ))
+            )}
+          </div>
         )}
       </div>
-    </section>
+    </div>
   )
 }
 
@@ -654,7 +658,7 @@ function ArticlesTab({ articles, onReload }: { articles: ContentArticle[]; onRel
   const blockLabel = (v: string) => ARTICLE_BLOCK_TYPES.find((o) => o.value === v)?.label ?? v
 
   return (
-    <section className="card-section">
+    <section className="card-section articles-section">
       <div className="section-title-row">
         <h2>Статьи (главный экран)</h2>
         <button type="button" className="add-btn" onClick={openCreate}>
@@ -665,7 +669,7 @@ function ArticlesTab({ articles, onReload }: { articles: ContentArticle[]; onRel
       {showForm && (
         <div className="content-form-card content-form-card-wide">
           <h3>{editing ? 'Редактировать статью' : 'Новая статья'}</h3>
-          <div className="content-form-grid">
+          <div className="content-form-grid content-form-grid-articles">
             <label>Блок на главной</label>
             <select
               value={form.blockType}
