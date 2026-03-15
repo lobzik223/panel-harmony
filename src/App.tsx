@@ -26,7 +26,10 @@ export default function App() {
               <AdminLayout>
                 <Routes>
                   <Route path="/" element={<DashboardPage />} />
-                  <Route path="/content" element={<ContentPage />} />
+                  <Route path="/content" element={<Navigate to="/content/main" replace />} />
+                  <Route path="/content/main" element={<ContentPage />} />
+                  <Route path="/content/sleep" element={<ContentPage />} />
+                  <Route path="/content/meditation" element={<ContentPage />} />
                   <Route path="/statistics" element={<StatisticsPage />} />
                   <Route path="*" element={<Navigate to="/" replace />} />
                 </Routes>

@@ -1,98 +1,66 @@
 import { useState, useEffect, useCallback } from 'react'
-import { useSearchParams, useNavigate } from 'react-router-dom'
-import { api, getMediaUrl, type ContentSection, type ContentTrack, type ContentArticle } from '../data/api'
+import { useLocation } from 'react-router-dom'
+import { api, getMediaUrl, type ContentSection, type ContentTrack, type ContentArticle, type ContentCourse } from '../data/api'
 import './SectionPage.css'
 import './ContentPage.css'
 
-type ContentTab = 'meditation' | 'sleep' | 'home' | 'articles'
-
-const CONTENT_TABS: { value: ContentTab; label: string; type: string }[] = [
-  { value: 'meditation', label: 'Медитации', type: 'MEDITATION' },
-  { value: 'sleep', label: 'Сон', type: 'SLEEP' },
-  { value: 'home', label: 'Главная (Гармония)', type: 'HOME' },
-  { value: 'articles', label: 'Статьи', type: '' },
-]
-
-const ARTICLE_BLOCK_TYPES = [
-  { value: 'FEATURED', label: 'Главная (избранное)' },
-  { value: 'RECOMMENDED', label: 'Рекомендуемое' },
-  { value: 'EMERGENCY', label: 'Экстренная помощь' },
-]
+type ContentMode = 'main' | 'sleep' | 'meditation'
 
 export default function ContentPage() {
-  const [searchParams] = useSearchParams()
-  const navigate = useNavigate()
-  const tabFromUrl = searchParams.get('tab') as ContentTab | null
-  const [tab, setTab] = useState<ContentTab>(
-    tabFromUrl && CONTENT_TABS.some((t) => t.value === tabFromUrl) ? tabFromUrl : 'meditation',
-  )
+  const location = useLocation()
+  const mode: ContentMode =
+    location.pathname === '/content/sleep' ? 'sleep' :
+    location.pathname === '/content/meditation' ? 'meditation' : 'main'
+
   const [sections, setSections] = useState<ContentSection[]>([])
   const [tracks, setTracks] = useState<ContentTrack[]>([])
   const [articles, setArticles] = useState<ContentArticle[]>([])
+  const [courses, setCourses] = useState<ContentCourse[]>([])
+  const [popularTracks, setPopularTracks] = useState<ContentTrack[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-
-  const loadArticles = useCallback(async () => {
-    try {
-      const data = await api.content.articles.get()
-      setArticles(data)
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Ошибка загрузки статей')
-    }
-  }, [])
 
   const loadAll = useCallback(async () => {
     setLoading(true)
     setError(null)
     try {
-      const [secs, trks] = await Promise.all([
+      const [secs, trks, arts, crs, pop] = await Promise.all([
         api.content.sections.get(),
         api.content.tracks.get(),
+        api.content.articles.get(),
+        api.content.courses.get(),
+        api.content.tracks.popular(20),
       ])
       setSections(secs)
       setTracks(trks)
-      await loadArticles()
+      setArticles(arts)
+      setCourses(crs)
+      setPopularTracks(pop)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Ошибка загрузки')
     } finally {
       setLoading(false)
     }
-  }, [loadArticles])
+  }, [])
 
   useEffect(() => {
     loadAll()
   }, [loadAll])
 
-  useEffect(() => {
-    const t = searchParams.get('tab') as ContentTab | null
-    if (t && CONTENT_TABS.some((x) => x.value === t)) setTab(t)
-  }, [searchParams])
-
-  const currentTabConfig = CONTENT_TABS.find((t) => t.value === tab)!
-  const sectionsForType = sections.filter((s) => s.type === currentTabConfig.type)
+  const pageTitle =
+    mode === 'main' ? 'Главный экран' :
+    mode === 'sleep' ? 'Сон' : 'Медитации'
 
   return (
     <div className="section-page content-page content-page-wide">
       <header className="page-header">
-        <h1>Контент</h1>
-        <p>Секции, треки и статьи для главного экрана приложения</p>
+        <h1>{pageTitle}</h1>
+        <p>
+          {mode === 'main' && 'О силе мышления, популярные треки, курсы и разделы главного экрана'}
+          {mode === 'sleep' && 'Разделы и треки для экрана «Сон»'}
+          {mode === 'meditation' && 'Разделы и треки для экрана «Медитации»'}
+        </p>
       </header>
-
-      <div className="content-tabs">
-        {CONTENT_TABS.map((t) => (
-          <button
-            key={t.value}
-            type="button"
-            className={`content-tab ${tab === t.value ? 'active' : ''}`}
-            onClick={() => {
-              setTab(t.value)
-              navigate(`/content?tab=${t.value}`, { replace: true })
-            }}
-          >
-            {t.label}
-          </button>
-        ))}
-      </div>
 
       {error && (
         <div className="content-error" role="alert">
@@ -105,18 +73,620 @@ export default function ContentPage() {
 
       {loading ? (
         <div className="page-loading">Загрузка...</div>
-      ) : tab === 'articles' ? (
-        <ArticlesTab articles={articles} onReload={loadArticles} />
+      ) : mode === 'main' ? (
+        <MainTab
+          articles={articles}
+          popularTracks={popularTracks}
+          courses={courses}
+          sections={sections}
+          tracks={tracks}
+          onReload={loadAll}
+        />
       ) : (
         <SplitSectionsTab
-          type={currentTabConfig.type}
-          typeLabel={currentTabConfig.label}
-          sections={sectionsForType}
+          type={mode === 'sleep' ? 'SLEEP' : 'MEDITATION'}
+          typeLabel={mode === 'sleep' ? 'Сон' : 'Медитации'}
+          sections={sections.filter((s) => s.type === (mode === 'sleep' ? 'SLEEP' : 'MEDITATION'))}
           tracks={tracks}
           onReload={loadAll}
         />
       )}
     </div>
+  )
+}
+
+/** Главный экран: О силе мышления, Популярные от Harmony, Курсы, Разделы главного экрана */
+function MainTab({
+  articles,
+  popularTracks,
+  courses,
+  sections,
+  tracks,
+  onReload,
+}: {
+  articles: ContentArticle[]
+  popularTracks: ContentTrack[]
+  courses: ContentCourse[]
+  sections: ContentSection[]
+  tracks: ContentTrack[]
+  onReload: () => void
+}) {
+  const mindPowerArticles = articles.filter((a) => a.blockType === 'RECOMMENDED')
+  const homeSections = sections.filter((s) => s.type === 'HOME')
+
+  return (
+    <div className="main-tab">
+      <MindPowerSection articles={mindPowerArticles} onReload={onReload} />
+      <PopularSection tracks={popularTracks} />
+      <CoursesSection courses={courses} onReload={onReload} />
+      <HomeSectionsBlock sections={homeSections} tracks={tracks} onReload={onReload} />
+    </div>
+  )
+}
+
+const SECTION_NAME_MIND = 'О силе мышления'
+
+function MindPowerSection({ articles, onReload }: { articles: ContentArticle[]; onReload: () => void }) {
+  const [creating, setCreating] = useState(false)
+  const [editing, setEditing] = useState<ContentArticle | null>(null)
+  const [saving, setSaving] = useState(false)
+  const [uploadingImage, setUploadingImage] = useState(false)
+  const [useCustomPublishTime, setUseCustomPublishTime] = useState(false)
+  const [form, setForm] = useState({
+    title: '',
+    descriptionShort: '',
+    descriptionFull: '',
+    imageUrl: null as string | null,
+    sortOrder: 0,
+    publishedAt: '',
+    publishTime: '12:00',
+  })
+
+  const openCreate = () => {
+    setEditing(null)
+    setCreating(true)
+    setUseCustomPublishTime(false)
+    setForm({
+      title: '',
+      descriptionShort: '',
+      descriptionFull: '',
+      imageUrl: null,
+      sortOrder: articles.length,
+      publishedAt: new Date().toISOString().slice(0, 10),
+      publishTime: '12:00',
+    })
+  }
+  const openEdit = (a: ContentArticle) => {
+    setEditing(a)
+    setCreating(false)
+    const pub = a.publishedAt ? new Date(a.publishedAt) : null
+    setUseCustomPublishTime(!!pub)
+    setForm({
+      title: a.title,
+      descriptionShort: a.descriptionShort,
+      descriptionFull: a.descriptionFull ?? '',
+      imageUrl: a.imageUrl ?? null,
+      sortOrder: a.sortOrder,
+      publishedAt: pub ? pub.toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10),
+      publishTime: pub ? `${String(pub.getHours()).padStart(2, '0')}:${String(pub.getMinutes()).padStart(2, '0')}` : '12:00',
+    })
+  }
+  const closeForm = () => {
+    setEditing(null)
+    setCreating(false)
+  }
+
+  const handleImage = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setUploadingImage(true)
+    try {
+      const url = await api.content.upload.articleImage(file)
+      setForm((f) => ({ ...f, imageUrl: url }))
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Ошибка загрузки изображения')
+    } finally {
+      setUploadingImage(false)
+    }
+  }
+
+  const save = async () => {
+    if (!form.title.trim()) {
+      alert('Укажите название карточки')
+      return
+    }
+    if (useCustomPublishTime && (!form.publishedAt || !form.publishTime)) {
+      alert('Укажите дату и время публикации')
+      return
+    }
+    setSaving(true)
+    try {
+      let publishedAt: string | undefined
+      if (useCustomPublishTime && form.publishedAt && form.publishTime) {
+        const [h, m] = form.publishTime.split(':').map(Number)
+        const d = new Date(form.publishedAt)
+        d.setHours(h || 0, m || 0, 0, 0)
+        publishedAt = d.toISOString()
+      }
+      if (editing) {
+        await api.content.articles.update(editing.id, {
+          title: form.title,
+          descriptionShort: form.descriptionShort,
+          descriptionFull: form.descriptionFull || undefined,
+          imageUrl: form.imageUrl ?? undefined,
+          sortOrder: form.sortOrder,
+          publishedAt: publishedAt ?? editing.publishedAt ?? undefined,
+        })
+      } else {
+        await api.content.articles.create({
+          blockType: 'RECOMMENDED',
+          title: form.title,
+          descriptionShort: form.descriptionShort,
+          descriptionFull: form.descriptionFull || undefined,
+          imageUrl: form.imageUrl ?? undefined,
+          sortOrder: form.sortOrder,
+          publishedAt,
+        })
+      }
+      closeForm()
+      onReload()
+    } catch (e) {
+      alert(e instanceof Error ? e.message : 'Ошибка сохранения')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const remove = async (id: string) => {
+    if (!confirm('Удалить карточку?')) return
+    try {
+      await api.content.articles.delete(id)
+      closeForm()
+      onReload()
+    } catch (e) {
+      alert(e instanceof Error ? e.message : 'Ошибка удаления')
+    }
+  }
+
+  const showForm = creating || editing
+
+  return (
+    <section className="main-block">
+      <div className="main-block-header">
+        <h2>{SECTION_NAME_MIND}</h2>
+        <button type="button" className="add-btn add-btn-small" onClick={openCreate}>
+          + Добавить карточку
+        </button>
+      </div>
+
+      {showForm && (
+        <div className="content-form-card main-form-card">
+          <h3>Добавление карточки в раздел «{SECTION_NAME_MIND}»</h3>
+          <div className="content-form-grid content-form-grid-wide">
+            <label htmlFor="mp-title">Название карточки</label>
+            <input
+              id="mp-title"
+              value={form.title}
+              onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
+              placeholder="Название"
+            />
+            <label htmlFor="mp-short">Краткое описание</label>
+            <textarea
+              id="mp-short"
+              value={form.descriptionShort}
+              onChange={(e) => setForm((f) => ({ ...f, descriptionShort: e.target.value }))}
+              placeholder="Краткое описание"
+              rows={2}
+            />
+            <label htmlFor="mp-full">Полное описание</label>
+            <textarea
+              id="mp-full"
+              value={form.descriptionFull}
+              onChange={(e) => setForm((f) => ({ ...f, descriptionFull: e.target.value }))}
+              placeholder="Полный текст"
+              rows={4}
+            />
+            <label>Обложка</label>
+            <div className="content-upload-row">
+              <input type="file" accept="image/*" onChange={handleImage} disabled={uploadingImage} />
+              {form.imageUrl && (
+                <img src={getMediaUrl(form.imageUrl)} alt="" className="content-preview-img" />
+              )}
+              {uploadingImage && <span>Загрузка...</span>}
+            </div>
+            <label className="content-checkbox-label">
+              <input
+                type="checkbox"
+                checked={useCustomPublishTime}
+                onChange={(e) => setUseCustomPublishTime(e.target.checked)}
+              />
+              Указать своё время публикации
+            </label>
+            {useCustomPublishTime && (
+              <>
+                <label htmlFor="mp-date">Дата публикации</label>
+                <input
+                  id="mp-date"
+                  type="date"
+                  value={form.publishedAt}
+                  onChange={(e) => setForm((f) => ({ ...f, publishedAt: e.target.value }))}
+                />
+                <label htmlFor="mp-time">Время публикации</label>
+                <input
+                  id="mp-time"
+                  type="time"
+                  value={form.publishTime}
+                  onChange={(e) => setForm((f) => ({ ...f, publishTime: e.target.value }))}
+                />
+              </>
+            )}
+            <label htmlFor="mp-order">Порядок</label>
+            <input
+              id="mp-order"
+              type="number"
+              value={form.sortOrder}
+              onChange={(e) => setForm((f) => ({ ...f, sortOrder: Number(e.target.value) || 0 }))}
+            />
+          </div>
+          <div className="content-form-actions">
+            <button type="button" className="add-btn add-btn-small" onClick={save} disabled={saving}>
+              {saving ? 'Сохранение...' : 'Сохранить'}
+            </button>
+            {editing && (
+              <button type="button" className="content-btn-danger content-btn-small" onClick={() => remove(editing.id)}>
+                Удалить
+              </button>
+            )}
+            <button type="button" className="content-btn-secondary content-btn-small" onClick={closeForm}>
+              Отмена
+            </button>
+          </div>
+        </div>
+      )}
+
+      <div className="cards-row">
+        {articles.length === 0 ? (
+          <div className="empty-section empty-section-small">Нет карточек. Нажмите «+ Добавить карточку».</div>
+        ) : (
+          [...articles]
+            .sort((a, b) => a.sortOrder - b.sortOrder)
+            .map((a) => (
+              <div key={a.id} className="card-tile">
+                {a.imageUrl ? (
+                  <img src={getMediaUrl(a.imageUrl)} alt="" className="card-tile-img" />
+                ) : (
+                  <div className="card-tile-img card-tile-placeholder" />
+                )}
+                <div className="card-tile-body">
+                  <strong>{a.title}</strong>
+                  <span className="content-meta">
+                    {a.publishedAt ? new Date(a.publishedAt).toLocaleDateString('ru-RU') : '—'}
+                  </span>
+                </div>
+                <button type="button" className="content-btn-small" onClick={() => openEdit(a)}>
+                  Изменить
+                </button>
+              </div>
+            ))
+        )}
+      </div>
+    </section>
+  )
+}
+
+function PopularSection({ tracks }: { tracks: ContentTrack[] }) {
+  return (
+    <section className="main-block">
+      <div className="main-block-header">
+        <h2>Популярные от Harmony</h2>
+      </div>
+      <div className="cards-row">
+        {tracks.length === 0 ? (
+          <div className="empty-section empty-section-small">Нет данных о прослушиваниях за последние 7 дней.</div>
+        ) : (
+          tracks.map((t) => (
+            <div key={t.id} className="card-tile">
+              {t.coverUrl ? (
+                <img src={getMediaUrl(t.coverUrl)} alt="" className="card-tile-img" />
+              ) : (
+                <div className="card-tile-img card-tile-placeholder" />
+              )}
+              <div className="card-tile-body">
+                <strong>{t.title}</strong>
+                <span className="content-meta content-listen-count">
+                  {(t as ContentTrack & { listenCount?: number }).listenCount ?? 0} прослушиваний
+                </span>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+    </section>
+  )
+}
+
+function CoursesSection({ courses, onReload }: { courses: ContentCourse[]; onReload: () => void }) {
+  const [creating, setCreating] = useState(false)
+  const [editing, setEditing] = useState<ContentCourse | null>(null)
+  const [saving, setSaving] = useState(false)
+  const [uploadingImage, setUploadingImage] = useState(false)
+  const [uploadingTrack, setUploadingTrack] = useState(false)
+  const [form, setForm] = useState({
+    title: '',
+    descriptionShort: '',
+    descriptionFull: '',
+    imageUrl: null as string | null,
+    sortOrder: 0,
+    isPublished: true,
+    tracks: [] as Array<{ title: string; descriptionShort: string; mediaUrl: string }>,
+  })
+
+  const openCreate = () => {
+    setEditing(null)
+    setCreating(true)
+    setForm({
+      title: '',
+      descriptionShort: '',
+      descriptionFull: '',
+      imageUrl: null,
+      sortOrder: courses.length,
+      isPublished: true,
+      tracks: [],
+    })
+  }
+  const openEdit = (c: ContentCourse) => {
+    setEditing(c)
+    setCreating(false)
+    setForm({
+      title: c.title,
+      descriptionShort: c.descriptionShort,
+      descriptionFull: c.descriptionFull ?? '',
+      imageUrl: c.imageUrl ?? null,
+      sortOrder: c.sortOrder,
+      isPublished: c.isPublished,
+      tracks: (c.courseTrackItems ?? []).map((t) => ({
+        title: t.title,
+        descriptionShort: t.descriptionShort ?? '',
+        mediaUrl: t.mediaUrl,
+      })),
+    })
+  }
+  const closeForm = () => {
+    setEditing(null)
+    setCreating(false)
+  }
+
+  const handleImage = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setUploadingImage(true)
+    try {
+      const url = await api.content.upload.cover(file)
+      setForm((f) => ({ ...f, imageUrl: url }))
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Ошибка загрузки обложки')
+    } finally {
+      setUploadingImage(false)
+    }
+  }
+
+  const addTrack = () => {
+    setForm((f) => ({
+      ...f,
+      tracks: [...f.tracks, { title: '', descriptionShort: '', mediaUrl: '' }],
+    }))
+  }
+  const updateTrack = (idx: number, field: string, value: string) => {
+    setForm((f) => {
+      const next = [...f.tracks]
+      next[idx] = { ...next[idx], [field]: value }
+      return { ...f, tracks: next }
+    })
+  }
+  const removeTrack = (idx: number) => {
+    setForm((f) => ({
+      ...f,
+      tracks: f.tracks.filter((_, i) => i !== idx),
+    }))
+  }
+  const handleTrackFile = async (idx: number, e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setUploadingTrack(true)
+    try {
+      const result = await api.content.upload.courseTrack(file)
+      updateTrack(idx, 'mediaUrl', result.url)
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Ошибка загрузки трека')
+    } finally {
+      setUploadingTrack(false)
+    }
+  }
+
+  const save = async () => {
+    if (!form.title.trim()) {
+      alert('Укажите название курса')
+      return
+    }
+    if (form.tracks.some((t) => !t.mediaUrl || !t.title.trim())) {
+      alert('У каждого трека должны быть название и загруженный файл')
+      return
+    }
+    setSaving(true)
+    try {
+      const body = {
+        title: form.title,
+        descriptionShort: form.descriptionShort,
+        descriptionFull: form.descriptionFull || undefined,
+        imageUrl: form.imageUrl ?? undefined,
+        sortOrder: form.sortOrder,
+        isPublished: form.isPublished,
+        tracks: form.tracks.map((t) => ({
+          title: t.title,
+          descriptionShort: t.descriptionShort || undefined,
+          mediaUrl: t.mediaUrl,
+        })),
+      }
+      if (editing) {
+        await api.content.courses.update(editing.id, body)
+      } else {
+        await api.content.courses.create(body)
+      }
+      closeForm()
+      onReload()
+    } catch (e) {
+      alert(e instanceof Error ? e.message : 'Ошибка сохранения')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const remove = async (id: string) => {
+    if (!confirm('Удалить курс?')) return
+    try {
+      await api.content.courses.delete(id)
+      closeForm()
+      onReload()
+    } catch (e) {
+      alert(e instanceof Error ? e.message : 'Ошибка удаления')
+    }
+  }
+
+  const showForm = creating || editing
+
+  return (
+    <section className="main-block">
+      <div className="main-block-header">
+        <h2>Курсы</h2>
+        <button type="button" className="add-btn add-btn-small" onClick={openCreate}>
+          + Добавить курс
+        </button>
+      </div>
+
+      {showForm && (
+        <div className="content-form-card main-form-card courses-form">
+          <h3>{editing ? 'Редактировать курс' : 'Новый курс'}</h3>
+          <div className="content-form-grid content-form-grid-wide">
+            <label htmlFor="cr-title">Название</label>
+            <input
+              id="cr-title"
+              value={form.title}
+              onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
+              placeholder="Название курса"
+            />
+            <label htmlFor="cr-desc">Краткое описание</label>
+            <textarea
+              id="cr-desc"
+              value={form.descriptionShort}
+              onChange={(e) => setForm((f) => ({ ...f, descriptionShort: e.target.value }))}
+              placeholder="Краткое описание"
+              rows={2}
+            />
+            <label>Обложка</label>
+            <div className="content-upload-row">
+              <input type="file" accept="image/*" onChange={handleImage} disabled={uploadingImage} />
+              {form.imageUrl && (
+                <img src={getMediaUrl(form.imageUrl)} alt="" className="content-preview-img" />
+              )}
+              {uploadingImage && <span>Загрузка...</span>}
+            </div>
+            <label className="content-checkbox-label">
+              <input
+                type="checkbox"
+                checked={form.isPublished}
+                onChange={(e) => setForm((f) => ({ ...f, isPublished: e.target.checked }))}
+              />
+              Опубликован
+            </label>
+          </div>
+          <div className="course-tracks-block">
+            <h4>Треки курса</h4>
+            <button type="button" className="content-btn-secondary content-btn-small" onClick={addTrack}>
+              + Добавить трек
+            </button>
+            {form.tracks.map((t, idx) => (
+              <div key={idx} className="course-track-row">
+                <input
+                  value={t.title}
+                  onChange={(e) => updateTrack(idx, 'title', e.target.value)}
+                  placeholder="Название трека"
+                  className="course-track-input"
+                />
+                <input
+                  type="file"
+                  accept="audio/*,video/*"
+                  onChange={(e) => handleTrackFile(idx, e)}
+                  disabled={uploadingTrack}
+                />
+                {t.mediaUrl && <span className="content-file-name">Файл загружен</span>}
+                <button type="button" className="content-btn-icon" onClick={() => removeTrack(idx)}>
+                  ✕
+                </button>
+              </div>
+            ))}
+          </div>
+          <div className="content-form-actions">
+            <button type="button" className="add-btn add-btn-small" onClick={save} disabled={saving}>
+              {saving ? 'Сохранение...' : 'Сохранить'}
+            </button>
+            {editing && (
+              <button type="button" className="content-btn-danger content-btn-small" onClick={() => remove(editing.id)}>
+                Удалить
+              </button>
+            )}
+            <button type="button" className="content-btn-secondary content-btn-small" onClick={closeForm}>
+              Отмена
+            </button>
+          </div>
+        </div>
+      )}
+
+      <div className="cards-row">
+        {courses.length === 0 ? (
+          <div className="empty-section empty-section-small">Нет курсов.</div>
+        ) : (
+          [...courses]
+            .sort((a, b) => a.sortOrder - b.sortOrder)
+            .map((c) => (
+              <div key={c.id} className="card-tile">
+                {c.imageUrl ? (
+                  <img src={getMediaUrl(c.imageUrl)} alt="" className="card-tile-img" />
+                ) : (
+                  <div className="card-tile-img card-tile-placeholder" />
+                )}
+                <div className="card-tile-body">
+                  <strong>{c.title}</strong>
+                  <span className="content-meta">
+                    {(c.courseTrackItems ?? []).length} треков
+                  </span>
+                </div>
+                <button type="button" className="content-btn-small" onClick={() => openEdit(c)}>
+                  Изменить
+                </button>
+              </div>
+            ))
+        )}
+      </div>
+    </section>
+  )
+}
+
+function HomeSectionsBlock({
+  sections,
+  tracks,
+  onReload,
+}: {
+  sections: ContentSection[]
+  tracks: ContentTrack[]
+  onReload: () => void
+}) {
+  return (
+    <section className="main-block">
+      <div className="main-block-header">
+        <h2>Разделы главного экрана</h2>
+      </div>
+      <SplitSectionsTab type="HOME" typeLabel="Главная" sections={sections} tracks={tracks} onReload={onReload} />
+    </section>
   )
 }
 
@@ -226,7 +796,7 @@ function SplitSectionsTab({
   }
   const openCreateTrack = () => {
     if (!selectedSectionId) {
-      alert('Сначала выберите раздел слева')
+      alert('Сначала выберите раздел')
       return
     }
     setEditingTrack(null)
@@ -336,20 +906,23 @@ function SplitSectionsTab({
           <div className="content-form-card content-form-compact">
             <h3>{editingSection ? 'Редактировать' : 'Новая секция'}</h3>
             <div className="content-form-grid content-form-grid-compact">
-              <label>Название</label>
+              <label htmlFor="sec-name">Название</label>
               <input
+                id="sec-name"
                 value={sectionForm.name}
                 onChange={(e) => setSectionForm((f) => ({ ...f, name: e.target.value }))}
-                placeholder="Например: Утренние"
+                placeholder="Например: Утренний сон"
               />
-              <label>Slug</label>
+              <label htmlFor="sec-slug">Slug</label>
               <input
+                id="sec-slug"
                 value={sectionForm.slug}
                 onChange={(e) => setSectionForm((f) => ({ ...f, slug: e.target.value }))}
                 placeholder="morning"
               />
-              <label>Порядок</label>
+              <label htmlFor="sec-order">Порядок</label>
               <input
+                id="sec-order"
                 type="number"
                 value={sectionForm.sortOrder}
                 onChange={(e) => setSectionForm((f) => ({ ...f, sortOrder: Number(e.target.value) || 0 }))}
@@ -374,7 +947,7 @@ function SplitSectionsTab({
         <div className="split-sections-list">
           {sections.length === 0 ? (
             <div className="empty-section empty-section-small">
-              Нет разделов. Добавьте раздел, чтобы привязать к нему треки.
+              Нет разделов. Добавьте секцию, чтобы привязать к ней треки.
             </div>
           ) : (
             [...sections]
@@ -409,9 +982,7 @@ function SplitSectionsTab({
 
       <div className="split-right">
         <div className="split-panel-header">
-          <h2>
-            Треки {selectedSection ? `— ${selectedSection.name}` : ''}
-          </h2>
+          <h2>Треки {selectedSection ? `— ${selectedSection.name}` : ''}</h2>
           <button
             type="button"
             className="add-btn add-btn-small"
@@ -555,209 +1126,5 @@ function SplitSectionsTab({
         )}
       </div>
     </div>
-  )
-}
-
-function ArticlesTab({ articles, onReload }: { articles: ContentArticle[]; onReload: () => void }) {
-  const [editing, setEditing] = useState<ContentArticle | null>(null)
-  const [creating, setCreating] = useState(false)
-  const [saving, setSaving] = useState(false)
-  const [uploadingImage, setUploadingImage] = useState(false)
-  const [form, setForm] = useState<Partial<ContentArticle> & { blockType: string; title: string }>({
-    blockType: 'FEATURED',
-    title: '',
-    descriptionShort: '',
-    descriptionFull: '',
-    imageUrl: null,
-    sortOrder: 0,
-  })
-
-  const openEdit = (a: ContentArticle) => {
-    setEditing(a)
-    setCreating(false)
-    setForm({
-      blockType: a.blockType,
-      title: a.title,
-      descriptionShort: a.descriptionShort,
-      descriptionFull: a.descriptionFull ?? '',
-      imageUrl: a.imageUrl ?? null,
-      sortOrder: a.sortOrder,
-    })
-  }
-  const openCreate = () => {
-    setEditing(null)
-    setCreating(true)
-    setForm({
-      blockType: 'FEATURED',
-      title: '',
-      descriptionShort: '',
-      descriptionFull: '',
-      imageUrl: null,
-      sortOrder: articles.length,
-    })
-  }
-  const closeForm = () => {
-    setEditing(null)
-    setCreating(false)
-  }
-
-  const handleImage = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file) return
-    setUploadingImage(true)
-    try {
-      const url = await api.content.upload.articleImage(file)
-      setForm((f) => ({ ...f, imageUrl: url }))
-    } catch (err) {
-      alert(err instanceof Error ? err.message : 'Ошибка загрузки изображения')
-    } finally {
-      setUploadingImage(false)
-    }
-  }
-
-  const save = async () => {
-    if (!form.title.trim()) {
-      alert('Укажите заголовок')
-      return
-    }
-    setSaving(true)
-    try {
-      if (editing) {
-        await api.content.articles.update(editing.id, form)
-      } else {
-        await api.content.articles.create({
-          blockType: form.blockType,
-          title: form.title,
-          descriptionShort: form.descriptionShort ?? undefined,
-          descriptionFull: form.descriptionFull ?? undefined,
-          imageUrl: form.imageUrl ?? undefined,
-          sortOrder: form.sortOrder ?? undefined,
-        })
-      }
-      closeForm()
-      onReload()
-    } catch (e) {
-      alert(e instanceof Error ? e.message : 'Ошибка сохранения')
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  const remove = async (id: string) => {
-    if (!confirm('Удалить статью?')) return
-    try {
-      await api.content.articles.delete(id)
-      closeForm()
-      onReload()
-    } catch (e) {
-      alert(e instanceof Error ? e.message : 'Ошибка удаления')
-    }
-  }
-
-  const showForm = creating || editing
-  const blockLabel = (v: string) => ARTICLE_BLOCK_TYPES.find((o) => o.value === v)?.label ?? v
-
-  return (
-    <section className="card-section articles-section">
-      <div className="section-title-row">
-        <h2>Статьи (главный экран)</h2>
-        <button type="button" className="add-btn" onClick={openCreate}>
-          + Добавить статью
-        </button>
-      </div>
-
-      {showForm && (
-        <div className="content-form-card content-form-card-wide">
-          <h3>{editing ? 'Редактировать статью' : 'Новая статья'}</h3>
-          <div className="content-form-grid content-form-grid-articles">
-            <label>Блок на главной</label>
-            <select
-              value={form.blockType}
-              onChange={(e) => setForm((f) => ({ ...f, blockType: e.target.value }))}
-            >
-              {ARTICLE_BLOCK_TYPES.map((o) => (
-                <option key={o.value} value={o.value}>
-                  {o.label}
-                </option>
-              ))}
-            </select>
-            <label>Заголовок</label>
-            <input
-              value={form.title}
-              onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
-              placeholder="Заголовок"
-            />
-            <label>Краткое описание</label>
-            <textarea
-              value={form.descriptionShort ?? ''}
-              onChange={(e) => setForm((f) => ({ ...f, descriptionShort: e.target.value }))}
-              placeholder="Краткое описание"
-              rows={2}
-            />
-            <label>Полное описание</label>
-            <textarea
-              value={form.descriptionFull ?? ''}
-              onChange={(e) => setForm((f) => ({ ...f, descriptionFull: e.target.value }))}
-              placeholder="Полный текст статьи"
-              rows={6}
-            />
-            <label>Изображение</label>
-            <div className="content-upload-row">
-              <input type="file" accept="image/*" onChange={handleImage} disabled={uploadingImage} />
-              {form.imageUrl && (
-                <img src={getMediaUrl(form.imageUrl)} alt="" className="content-preview-img" />
-              )}
-              {uploadingImage && <span>Загрузка...</span>}
-            </div>
-            <label>Порядок</label>
-            <input
-              type="number"
-              value={form.sortOrder ?? 0}
-              onChange={(e) => setForm((f) => ({ ...f, sortOrder: Number(e.target.value) || 0 }))}
-            />
-          </div>
-          <div className="content-form-actions">
-            <button type="button" className="add-btn" onClick={save} disabled={saving}>
-              {saving ? 'Сохранение...' : 'Сохранить'}
-            </button>
-            {editing && (
-              <button type="button" className="content-btn-danger" onClick={() => remove(editing.id)}>
-                Удалить
-              </button>
-            )}
-            <button type="button" className="content-btn-secondary" onClick={closeForm}>
-              Отмена
-            </button>
-          </div>
-        </div>
-      )}
-
-      <div className="content-list">
-        {articles.length === 0 ? (
-          <div className="empty-section">
-            Нет статей. Статьи показываются на главном экране приложения.
-          </div>
-        ) : (
-          [...articles]
-            .sort((a, b) => a.sortOrder - b.sortOrder)
-            .map((a) => (
-              <div key={a.id} className="content-list-item content-track-item">
-                {a.imageUrl && (
-                  <img src={getMediaUrl(a.imageUrl)} alt="" className="content-list-thumb" />
-                )}
-                <div className="content-list-body">
-                  <strong>{a.title}</strong>
-                  <span className="content-meta">{blockLabel(a.blockType)}</span>
-                </div>
-                <div className="content-list-actions">
-                  <button type="button" className="content-btn-small" onClick={() => openEdit(a)}>
-                    Изменить
-                  </button>
-                </div>
-              </div>
-            ))
-        )}
-      </div>
-    </section>
   )
 }

@@ -5,7 +5,9 @@ import './AdminLayout.css'
 
 const navItems = [
   { path: '/', label: 'Главная', icon: SidebarIcons.home },
-  { path: '/content', label: 'Контент', icon: SidebarIcons.content },
+  { path: '/content/main', label: 'Главный', icon: SidebarIcons.content },
+  { path: '/content/sleep', label: 'Сон', icon: SidebarIcons.sleep },
+  { path: '/content/meditation', label: 'Медитация', icon: SidebarIcons.harmony },
   { path: '/statistics', label: 'Статистика', icon: SidebarIcons.statistics },
 ]
 
@@ -35,6 +37,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             <NavLink
               key={item.path}
               to={item.path}
+              end={item.path === '/'}
               className={({ isActive }) => (isActive ? 'nav-item active' : 'nav-item')}
             >
               <span className="nav-icon">{item.icon}</span>
