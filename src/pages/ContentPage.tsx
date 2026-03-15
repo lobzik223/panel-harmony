@@ -706,19 +706,23 @@ function SplitSectionsTab({
   const [selectedSectionId, setSelectedSectionId] = useState<string | null>(null)
   const [editingSection, setEditingSection] = useState<ContentSection | null>(null)
   const [creatingSection, setCreatingSection] = useState(false)
-  const [sectionForm, setSectionForm] = useState({ name: '', slug: '', sortOrder: 0 })
+  const [sectionForm, setSectionForm] = useState({ name: '', slug: '', sortOrder: 0, cardType: 'TRACKS' as string })
   const [editingTrack, setEditingTrack] = useState<ContentTrack | null>(null)
   const [creatingTrack, setCreatingTrack] = useState(false)
   const [saving, setSaving] = useState(false)
   const [uploadingCover, setUploadingCover] = useState(false)
   const [uploadingAudio, setUploadingAudio] = useState(false)
+  const [uploadingVideo, setUploadingVideo] = useState(false)
   const [lastUploadSize, setLastUploadSize] = useState<number | null>(null)
+  const [mediaTypeChoice, setMediaTypeChoice] = useState<'audio' | 'video' | null>(null)
   const [trackForm, setTrackForm] = useState<Partial<ContentTrack> & { sectionId: string; title: string }>({
     sectionId: '',
     title: '',
     descriptionShort: '',
     coverUrl: null,
     audioUrl: null,
+    videoUrl: null,
+    mediaType: 'AUDIO',
     durationSeconds: null,
     level: null,
     isPremium: false,
@@ -737,12 +741,12 @@ function SplitSectionsTab({
   const openEditSection = (s: ContentSection) => {
     setEditingSection(s)
     setCreatingSection(false)
-    setSectionForm({ name: s.name, slug: s.slug, sortOrder: s.sortOrder })
+    setSectionForm({ name: s.name, slug: s.slug, sortOrder: s.sortOrder, cardType: s.cardType ?? 'TRACKS' })
   }
   const openCreateSection = () => {
     setEditingSection(null)
     setCreatingSection(true)
-    setSectionForm({ name: '', slug: '', sortOrder: sections.length })
+    setSectionForm({ name: '', slug: '', sortOrder: sections.length, cardType: 'TRACKS' })
   }
   const closeSectionForm = () => {
     setEditingSection(null)
@@ -752,10 +756,11 @@ function SplitSectionsTab({
   const saveSection = async () => {
     setSaving(true)
     try {
+      const body = { ...sectionForm, type }
       if (editingSection) {
-        await api.content.sections.update(editingSection.id, { ...sectionForm, type })
+        await api.content.sections.update(editingSection.id, body)
       } else {
-        await api.content.sections.create({ ...sectionForm, type })
+        await api.content.sections.create(body)
       }
       closeSectionForm()
       onReload()
@@ -781,6 +786,7 @@ function SplitSectionsTab({
   const openEditTrack = (t: ContentTrack) => {
     setEditingTrack(t)
     setCreatingTrack(false)
+    setMediaTypeChoice(null)
     setLastUploadSize(null)
     setTrackForm({
       sectionId: t.sectionId,
@@ -788,6 +794,8 @@ function SplitSectionsTab({
       descriptionShort: t.descriptionShort,
       coverUrl: t.coverUrl ?? null,
       audioUrl: t.audioUrl ?? null,
+      videoUrl: t.videoUrl ?? null,
+      mediaType: (t.mediaType as 'AUDIO' | 'VIDEO') ?? (t.videoUrl ? 'VIDEO' : 'AUDIO'),
       durationSeconds: t.durationSeconds ?? null,
       level: t.level ?? null,
       isPremium: t.isPremium,
@@ -799,8 +807,11 @@ function SplitSectionsTab({
       alert('Сначала выберите раздел')
       return
     }
+    const sec = sections.find((s) => s.id === selectedSectionId)
+    const cardType = sec?.cardType ?? 'TRACKS'
     setEditingTrack(null)
     setCreatingTrack(true)
+    setMediaTypeChoice(cardType === 'VIDEO' ? 'video' : null)
     setLastUploadSize(null)
     setTrackForm({
       sectionId: selectedSectionId,
@@ -808,6 +819,8 @@ function SplitSectionsTab({
       descriptionShort: '',
       coverUrl: null,
       audioUrl: null,
+      videoUrl: null,
+      mediaType: cardType === 'VIDEO' ? 'VIDEO' : 'AUDIO',
       durationSeconds: null,
       level: null,
       isPremium: false,
@@ -817,6 +830,7 @@ function SplitSectionsTab({
   const closeTrackForm = () => {
     setEditingTrack(null)
     setCreatingTrack(false)
+    setMediaTypeChoice(null)
   }
 
   const handleCover = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -841,6 +855,8 @@ function SplitSectionsTab({
       setTrackForm((f) => ({
         ...f,
         audioUrl: result.url,
+        videoUrl: null,
+        mediaType: 'AUDIO',
         durationSeconds: result.durationSeconds ?? f.durationSeconds ?? null,
       }))
       setLastUploadSize(result.size ?? null)
@@ -848,6 +864,35 @@ function SplitSectionsTab({
       alert(err instanceof Error ? err.message : 'Ошибка загрузки аудио')
     } finally {
       setUploadingAudio(false)
+    }
+  }
+
+  const handleVideo = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    if (file.size > 300 * 1024 * 1024) {
+      alert('Видео не должно превышать 300 МБ')
+      return
+    }
+    const ext = file.name.toLowerCase().split('.').pop()
+    if (!['mp4', 'webm', 'm4v'].includes(ext || '')) {
+      alert('Разрешены форматы: mp4, webm, m4v (для Android и iOS)')
+      return
+    }
+    setUploadingVideo(true)
+    try {
+      const result = await api.content.upload.video(file)
+      setTrackForm((f) => ({
+        ...f,
+        videoUrl: result.url,
+        audioUrl: null,
+        mediaType: 'VIDEO',
+      }))
+      setLastUploadSize(result.size ?? null)
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Ошибка загрузки видео')
+    } finally {
+      setUploadingVideo(false)
     }
   }
 
@@ -860,6 +905,14 @@ function SplitSectionsTab({
   const saveTrack = async () => {
     if (!trackForm.sectionId || !trackForm.title.trim()) {
       alert('Укажите раздел и название')
+      return
+    }
+    if (trackForm.mediaType === 'VIDEO' && !trackForm.videoUrl) {
+      alert('Загрузите видео')
+      return
+    }
+    if (trackForm.mediaType === 'AUDIO' && !trackForm.audioUrl) {
+      alert('Загрузите аудио')
       return
     }
     setSaving(true)
@@ -927,6 +980,20 @@ function SplitSectionsTab({
                 value={sectionForm.sortOrder}
                 onChange={(e) => setSectionForm((f) => ({ ...f, sortOrder: Number(e.target.value) || 0 }))}
               />
+              {type === 'HOME' && (
+                <>
+                  <label htmlFor="sec-cardType">Тип карточек</label>
+                  <select
+                    id="sec-cardType"
+                    value={sectionForm.cardType}
+                    onChange={(e) => setSectionForm((f) => ({ ...f, cardType: e.target.value }))}
+                  >
+                    <option value="STATIC">Статьи (как «О силе мышления»)</option>
+                    <option value="TRACKS">Треки (аудио)</option>
+                    <option value="VIDEO">Видео</option>
+                  </select>
+                </>
+              )}
             </div>
             <div className="content-form-actions content-form-actions-compact">
               <button type="button" className="add-btn add-btn-small" onClick={saveSection} disabled={saving}>
@@ -947,7 +1014,7 @@ function SplitSectionsTab({
         <div className="split-sections-list">
           {sections.length === 0 ? (
             <div className="empty-section empty-section-small">
-              Нет разделов. Добавьте секцию, чтобы привязать к ней треки.
+              Нет разделов. Нажмите «Добавить раздел» ниже.
             </div>
           ) : (
             [...sections]
@@ -978,6 +1045,13 @@ function SplitSectionsTab({
               ))
           )}
         </div>
+        {type === 'HOME' && (
+          <div className="split-add-section-footer">
+            <button type="button" className="add-btn add-btn-small" onClick={openCreateSection}>
+              + Добавить раздел
+            </button>
+          </div>
+        )}
       </div>
 
       <div className="split-right">
@@ -1002,6 +1076,37 @@ function SplitSectionsTab({
         {selectedSectionId && showTrackForm && (
           <div className="content-form-card content-form-track">
             <h3>{editingTrack ? 'Редактировать трек' : 'Новый трек'}</h3>
+            {mediaTypeChoice === null && selectedSection?.cardType === 'TRACKS' && !editingTrack ? (
+              <div className="content-media-choice">
+                <p>Какой тип карточки добавляете?</p>
+                <div className="content-choice-buttons">
+                  <button
+                    type="button"
+                    className="add-btn add-btn-small"
+                    onClick={() => {
+                      setMediaTypeChoice('audio')
+                      setTrackForm((f) => ({ ...f, mediaType: 'AUDIO' }))
+                    }}
+                  >
+                    Аудио
+                  </button>
+                  <button
+                    type="button"
+                    className="add-btn add-btn-small"
+                    onClick={() => {
+                      setMediaTypeChoice('video')
+                      setTrackForm((f) => ({ ...f, mediaType: 'VIDEO' }))
+                    }}
+                  >
+                    Видео
+                  </button>
+                </div>
+                <button type="button" className="content-btn-secondary content-btn-small" onClick={closeTrackForm}>
+                  Отмена
+                </button>
+              </div>
+            ) : (
+            <>
             <div className="content-form-grid content-form-grid-wide">
               <label>Раздел</label>
               <select
@@ -1035,30 +1140,51 @@ function SplitSectionsTab({
                 )}
                 {uploadingCover && <span>Загрузка...</span>}
               </div>
-              <label>Аудио</label>
-              <div className="content-upload-row">
-                <input type="file" accept="audio/*" onChange={handleAudio} disabled={uploadingAudio} />
-                {trackForm.audioUrl && <span className="content-file-name">Файл загружен</span>}
-                {lastUploadSize != null && (
-                  <span className="content-file-size">Размер: {formatSize(lastUploadSize)}</span>
-                )}
-                {uploadingAudio && <span>Загрузка...</span>}
-              </div>
-              {(trackForm.durationSeconds != null && trackForm.durationSeconds > 0) && (
+              {trackForm.mediaType === 'VIDEO' ? (
                 <>
-                  <label>Длительность</label>
-                  <div className="content-readonly-value">
-                    {Math.floor(trackForm.durationSeconds / 60)} мин{' '}
-                    {trackForm.durationSeconds % 60 > 0 ? `${trackForm.durationSeconds % 60} сек` : ''}
+                  <label>Видео (макс. 300 МБ, mp4, webm, m4v)</label>
+                  <div className="content-upload-row">
+                    <input
+                      type="file"
+                      accept="video/mp4,video/webm,video/x-m4v,.mp4,.webm,.m4v"
+                      onChange={handleVideo}
+                      disabled={uploadingVideo}
+                    />
+                    {trackForm.videoUrl && <span className="content-file-name">Видео загружено</span>}
+                    {lastUploadSize != null && (
+                      <span className="content-file-size">Размер: {formatSize(lastUploadSize)}</span>
+                    )}
+                    {uploadingVideo && <span>Загрузка...</span>}
                   </div>
                 </>
+              ) : (
+                <>
+                  <label>Аудио</label>
+                  <div className="content-upload-row">
+                    <input type="file" accept="audio/*" onChange={handleAudio} disabled={uploadingAudio} />
+                    {trackForm.audioUrl && <span className="content-file-name">Файл загружен</span>}
+                    {lastUploadSize != null && (
+                      <span className="content-file-size">Размер: {formatSize(lastUploadSize)}</span>
+                    )}
+                    {uploadingAudio && <span>Загрузка...</span>}
+                  </div>
+                  {(trackForm.durationSeconds != null && trackForm.durationSeconds > 0) && (
+                    <>
+                      <label>Длительность</label>
+                      <div className="content-readonly-value">
+                        {Math.floor(trackForm.durationSeconds / 60)} мин{' '}
+                        {trackForm.durationSeconds % 60 > 0 ? `${trackForm.durationSeconds % 60} сек` : ''}
+                      </div>
+                    </>
+                  )}
+                  <label>Уровень</label>
+                  <input
+                    value={trackForm.level ?? ''}
+                    onChange={(e) => setTrackForm((f) => ({ ...f, level: e.target.value || null }))}
+                    placeholder="Например: начальный"
+                  />
+                </>
               )}
-              <label>Уровень</label>
-              <input
-                value={trackForm.level ?? ''}
-                onChange={(e) => setTrackForm((f) => ({ ...f, level: e.target.value || null }))}
-                placeholder="Например: начальный"
-              />
               <label className="content-checkbox-label">
                 <input
                   type="checkbox"
@@ -1087,6 +1213,8 @@ function SplitSectionsTab({
                 Отмена
               </button>
             </div>
+            </>
+            )}
           </div>
         )}
 
@@ -1111,7 +1239,7 @@ function SplitSectionsTab({
                     <div className="content-list-body">
                       <strong>{t.title}</strong>
                       <span className="content-meta">
-                        {t.level || '—'} · {t.audioUrl ? 'есть аудио' : 'нет аудио'}
+                        {t.level || '—'} · {t.mediaType === 'VIDEO' ? (t.videoUrl ? 'видео' : 'нет видео') : (t.audioUrl ? 'аудио' : 'нет аудио')}
                       </span>
                     </div>
                     <div className="content-list-actions">

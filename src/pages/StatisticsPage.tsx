@@ -1,11 +1,20 @@
 import { useState, useEffect, useCallback } from 'react'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts'
-import { Server, Database, UserX, RefreshCw } from 'lucide-react'
+import { Server, Database, UserX, RefreshCw, HardDrive } from 'lucide-react'
 import { api, type HealthStats } from '../data/api'
 import './SectionPage.css'
 import './StatisticsPage.css'
 
 const BAR_COLORS = ['#3b82f6', '#8b5cf6', '#06b6d4']
+
+const HOUR_MS = 60 * 60 * 1000
+
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} Б`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} КБ`
+  if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(2)} МБ`
+  return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} ГБ`
+}
 
 export default function StatisticsPage() {
   const [stats, setStats] = useState<HealthStats | null>(null)
@@ -28,7 +37,7 @@ export default function StatisticsPage() {
 
   useEffect(() => {
     load()
-    const t = setInterval(load, 60_000)
+    const t = setInterval(load, HOUR_MS)
     return () => clearInterval(t)
   }, [load])
 
@@ -102,6 +111,45 @@ export default function StatisticsPage() {
               </div>
             </div>
           </section>
+
+          {stats.diskUsage && (
+            <section className="card-section stats-disk-section">
+              <h2>Заполнение диска</h2>
+              <p className="stats-section-desc">Размер папок с загрузками и общее место на сервере (обновляется каждый час)</p>
+              <div className="stats-disk-cards">
+                {stats.diskUsage.diskTotalBytes != null && stats.diskUsage.diskUsedBytes != null && (
+                  <div className="stats-disk-card stats-disk-total">
+                    <div className="stats-disk-icon">
+                      <HardDrive size={24} />
+                    </div>
+                    <div className="stats-disk-body">
+                      <span className="stats-disk-label">Диск (/)</span>
+                      <span className="stats-disk-value">
+                        {formatBytes(stats.diskUsage.diskUsedBytes)} из {formatBytes(stats.diskUsage.diskTotalBytes)}
+                      </span>
+                      <span className="stats-disk-meta">
+                        Свободно: {formatBytes(stats.diskUsage.diskAvailBytes ?? 0)}
+                      </span>
+                    </div>
+                  </div>
+                )}
+                <div className="stats-disk-card">
+                  <div className="stats-disk-body">
+                    <span className="stats-disk-label">Всего загрузок</span>
+                    <span className="stats-disk-value">{formatBytes(stats.diskUsage.totalUploadsBytes)}</span>
+                  </div>
+                </div>
+              </div>
+              <div className="stats-disk-folders">
+                {stats.diskUsage.folders.map((f) => (
+                  <div key={f.path} className="stats-disk-row">
+                    <span className="stats-disk-folder-label">{f.label}</span>
+                    <span className="stats-disk-folder-size">{formatBytes(f.bytes)}</span>
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
 
           <section className="card-section">
             <h2>Регистрации</h2>

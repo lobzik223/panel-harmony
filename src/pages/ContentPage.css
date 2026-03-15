@@ -603,3 +603,25 @@
 .courses-form .content-form-grid {
   margin-bottom: 0;
 }
+
+.content-media-choice {
+  padding: 16px 0;
+}
+
+.content-media-choice p {
+  margin: 0 0 16px;
+  font-size: 14px;
+  color: #424242;
+}
+
+.content-choice-buttons {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.split-add-section-footer {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid #e5e5e5;
+}

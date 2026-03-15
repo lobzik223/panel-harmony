@@ -148,3 +148,100 @@
   color: #111827;
   margin-right: 4px;
 }
+
+/* Заполнение диска */
+.stats-disk-section {
+  margin-bottom: 40px;
+}
+
+.stats-disk-cards {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.stats-disk-card {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 20px;
+  background: #fff;
+  border-radius: 12px;
+  border: 1px solid #e5e7eb;
+  min-width: 0;
+}
+
+.stats-disk-total {
+  background: #f0f9ff;
+  border-color: #bae6fd;
+}
+
+.stats-disk-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  background: #e0f2fe;
+  color: #0284c7;
+  flex-shrink: 0;
+}
+
+.stats-disk-body {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.stats-disk-label {
+  font-size: 13px;
+  color: #6b7280;
+  font-weight: 500;
+}
+
+.stats-disk-value {
+  font-size: 18px;
+  font-weight: 700;
+  color: #111827;
+}
+
+.stats-disk-meta {
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.stats-disk-folders {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: #fff;
+  padding: 16px 20px;
+  border-radius: 12px;
+  border: 1px solid #e5e7eb;
+}
+
+.stats-disk-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 0;
+  border-bottom: 1px solid #f3f4f6;
+}
+
+.stats-disk-row:last-child {
+  border-bottom: none;
+}
+
+.stats-disk-folder-label {
+  font-size: 14px;
+  color: #4b5563;
+}
+
+.stats-disk-folder-size {
+  font-size: 14px;
+  font-weight: 600;
+  color: #111827;
+}

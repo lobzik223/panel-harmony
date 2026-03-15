@@ -61,6 +61,12 @@ export function getMediaUrl(path: string | null | undefined): string {
   return path.startsWith('http') ? path : `${API_BASE.replace(/\/$/, '')}${path.startsWith('/') ? '' : '/'}${path}`
 }
 
+export interface DiskUsageItem {
+  path: string
+  label: string
+  bytes: number
+}
+
 export interface HealthStats {
   serverOk: boolean
   dbOk: boolean
@@ -69,6 +75,13 @@ export interface HealthStats {
   registrationsWeek: number
   registrationsMonth: number
   deletedAccounts: number
+  diskUsage?: {
+    folders: DiskUsageItem[]
+    totalUploadsBytes: number
+    diskTotalBytes?: number
+    diskUsedBytes?: number
+    diskAvailBytes?: number
+  }
 }
 
 export interface ContentSection {
@@ -76,6 +89,7 @@ export interface ContentSection {
   name: string
   slug: string
   type: string
+  cardType?: string // STATIC | TRACKS | VIDEO
   sortOrder: number
   createdAt: string
   updatedAt: string
@@ -90,6 +104,8 @@ export interface ContentTrack {
   descriptionShort: string
   coverUrl: string | null
   audioUrl: string | null
+  videoUrl?: string | null
+  mediaType?: string // AUDIO | VIDEO
   durationSeconds?: number | null
   level: string | null
   isPremium: boolean
@@ -176,9 +192,9 @@ export const api = {
           `${API_BASE}${API_PREFIX}/content/sections${type ? `?type=${encodeURIComponent(type)}` : ''}`,
         ),
       getById: (id: string) => fetchJson<ContentSection>(`${API_BASE}${API_PREFIX}/content/sections/${id}`),
-      create: (body: { name: string; slug: string; type: string; sortOrder?: number }) =>
+      create: (body: { name: string; slug: string; type: string; cardType?: string; sortOrder?: number }) =>
         fetchJson<ContentSection>(`${API_BASE}${API_PREFIX}/content/sections`, { method: 'POST', body: JSON.stringify(body) }),
-      update: (id: string, body: Partial<{ name: string; slug: string; type: string; sortOrder: number }>) =>
+      update: (id: string, body: Partial<{ name: string; slug: string; type: string; cardType: string; sortOrder: number }>) =>
         fetchJson<ContentSection>(`${API_BASE}${API_PREFIX}/content/sections/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
       delete: (id: string) =>
         fetch(`${API_BASE}${API_PREFIX}/content/sections/${id}`, { method: 'DELETE', headers: getAuthHeaders() }).then((r) => { if (!r.ok) throw new Error(String(r.status)) }),
@@ -257,6 +273,16 @@ export const api = {
         if (!res.ok) throw new Error(apiErrorMessage(res, await res.text()))
         const data = (await res.json()) as { url: string }
         return data.url
+      },
+      video: async (file: File): Promise<{ url: string; size?: number }> => {
+        const form = new FormData()
+        form.append('file', file)
+        const headers = getAuthHeaders()
+        delete (headers as any)['Content-Type']
+        const res = await fetch(`${API_BASE}${API_PREFIX}/content/upload/video`, { method: 'POST', headers, body: form })
+        if (!res.ok) throw new Error(apiErrorMessage(res, await res.text()))
+        const data = (await res.json()) as { url: string; size?: number }
+        return { url: data.url, size: data.size }
       },
       courseTrack: async (file: File): Promise<{ url: string; size?: number }> => {
         const form = new FormData()
