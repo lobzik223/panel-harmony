@@ -126,6 +126,7 @@ export interface ContentArticle {
   sortOrder: number
   publishedAt: string | null
   durationMinutes: number | null
+  isPremium: boolean
   createdAt: string
   updatedAt: string
 }
@@ -222,7 +223,7 @@ export const api = {
           `${API_BASE}${API_PREFIX}/content/articles${blockType ? `?blockType=${encodeURIComponent(blockType)}` : ''}`,
         ),
       getById: (id: string) => fetchJson<ContentArticle>(`${API_BASE}${API_PREFIX}/content/articles/${id}`),
-      create: (body: { blockType: string; title: string; descriptionShort?: string; descriptionFull?: string; imageUrl?: string; sortOrder?: number; publishedAt?: string; durationMinutes?: number }) =>
+      create: (body: { blockType: string; title: string; descriptionShort?: string; descriptionFull?: string; imageUrl?: string; sortOrder?: number; publishedAt?: string; durationMinutes?: number; isPremium?: boolean }) =>
         fetchJson<ContentArticle>(`${API_BASE}${API_PREFIX}/content/articles`, { method: 'POST', body: JSON.stringify(body) }),
       update: (id: string, body: Partial<ContentArticle>) =>
         fetchJson<ContentArticle>(`${API_BASE}${API_PREFIX}/content/articles/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),

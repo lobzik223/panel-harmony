@@ -140,6 +140,7 @@ function MindPowerSection({ articles, onReload }: { articles: ContentArticle[]; 
     sortOrder: 0,
     publishedAt: '',
     publishTime: '12:00',
+    isPremium: false,
   })
 
   const openCreate = () => {
@@ -154,13 +155,14 @@ function MindPowerSection({ articles, onReload }: { articles: ContentArticle[]; 
       sortOrder: articles.length,
       publishedAt: new Date().toISOString().slice(0, 10),
       publishTime: '12:00',
+      isPremium: false,
     })
   }
   const openEdit = (a: ContentArticle) => {
     setEditing(a)
     setCreating(false)
     const pub = a.publishedAt ? new Date(a.publishedAt) : null
-    setUseCustomPublishTime(!!pub)
+    setUseCustomPublishTime(false)
     setForm({
       title: a.title,
       descriptionShort: a.descriptionShort,
@@ -169,6 +171,7 @@ function MindPowerSection({ articles, onReload }: { articles: ContentArticle[]; 
       sortOrder: a.sortOrder,
       publishedAt: pub ? pub.toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10),
       publishTime: pub ? `${String(pub.getHours()).padStart(2, '0')}:${String(pub.getMinutes()).padStart(2, '0')}` : '12:00',
+      isPremium: (a as ContentArticle & { isPremium?: boolean }).isPremium ?? false,
     })
   }
   const closeForm = () => {
@@ -195,14 +198,14 @@ function MindPowerSection({ articles, onReload }: { articles: ContentArticle[]; 
       alert('Укажите название карточки')
       return
     }
-    if (useCustomPublishTime && (!form.publishedAt || !form.publishTime)) {
+    if (creating && useCustomPublishTime && (!form.publishedAt || !form.publishTime)) {
       alert('Укажите дату и время публикации')
       return
     }
     setSaving(true)
     try {
       let publishedAt: string | undefined
-      if (useCustomPublishTime && form.publishedAt && form.publishTime) {
+      if (creating && useCustomPublishTime && form.publishedAt && form.publishTime) {
         const [h, m] = form.publishTime.split(':').map(Number)
         const d = new Date(form.publishedAt)
         d.setHours(h || 0, m || 0, 0, 0)
@@ -215,7 +218,7 @@ function MindPowerSection({ articles, onReload }: { articles: ContentArticle[]; 
           descriptionFull: form.descriptionFull || undefined,
           imageUrl: form.imageUrl ?? undefined,
           sortOrder: form.sortOrder,
-          publishedAt: publishedAt ?? editing.publishedAt ?? undefined,
+          isPremium: form.isPremium,
         })
       } else {
         await api.content.articles.create({
@@ -226,6 +229,7 @@ function MindPowerSection({ articles, onReload }: { articles: ContentArticle[]; 
           imageUrl: form.imageUrl ?? undefined,
           sortOrder: form.sortOrder,
           publishedAt,
+          isPremium: form.isPremium,
         })
       }
       closeForm()
@@ -261,7 +265,7 @@ function MindPowerSection({ articles, onReload }: { articles: ContentArticle[]; 
 
       {showForm && (
         <div className="content-form-card main-form-card">
-          <h3>Добавление карточки в раздел «{SECTION_NAME_MIND}»</h3>
+          <h3>{editing ? 'Редактирование карточки' : `Добавление карточки в раздел «${SECTION_NAME_MIND}»`}</h3>
           <div className="content-form-grid content-form-grid-wide">
             <label htmlFor="mp-title">Название карточки</label>
             <input
@@ -294,32 +298,44 @@ function MindPowerSection({ articles, onReload }: { articles: ContentArticle[]; 
               )}
               {uploadingImage && <span>Загрузка...</span>}
             </div>
+            {!editing && (
+              <>
+                <label className="content-checkbox-label">
+                  <input
+                    type="checkbox"
+                    checked={useCustomPublishTime}
+                    onChange={(e) => setUseCustomPublishTime(e.target.checked)}
+                  />
+                  Указать своё время публикации
+                </label>
+                {useCustomPublishTime && (
+                  <>
+                    <label htmlFor="mp-date">Дата публикации</label>
+                    <input
+                      id="mp-date"
+                      type="date"
+                      value={form.publishedAt}
+                      onChange={(e) => setForm((f) => ({ ...f, publishedAt: e.target.value }))}
+                    />
+                    <label htmlFor="mp-time">Время публикации</label>
+                    <input
+                      id="mp-time"
+                      type="time"
+                      value={form.publishTime}
+                      onChange={(e) => setForm((f) => ({ ...f, publishTime: e.target.value }))}
+                    />
+                  </>
+                )}
+              </>
+            )}
             <label className="content-checkbox-label">
               <input
                 type="checkbox"
-                checked={useCustomPublishTime}
-                onChange={(e) => setUseCustomPublishTime(e.target.checked)}
+                checked={form.isPremium}
+                onChange={(e) => setForm((f) => ({ ...f, isPremium: e.target.checked }))}
               />
-              Указать своё время публикации
+              Премиум
             </label>
-            {useCustomPublishTime && (
-              <>
-                <label htmlFor="mp-date">Дата публикации</label>
-                <input
-                  id="mp-date"
-                  type="date"
-                  value={form.publishedAt}
-                  onChange={(e) => setForm((f) => ({ ...f, publishedAt: e.target.value }))}
-                />
-                <label htmlFor="mp-time">Время публикации</label>
-                <input
-                  id="mp-time"
-                  type="time"
-                  value={form.publishTime}
-                  onChange={(e) => setForm((f) => ({ ...f, publishTime: e.target.value }))}
-                />
-              </>
-            )}
             <label htmlFor="mp-order">Порядок</label>
             <input
               id="mp-order"
@@ -334,7 +350,7 @@ function MindPowerSection({ articles, onReload }: { articles: ContentArticle[]; 
             </button>
             {editing && (
               <button type="button" className="content-btn-danger content-btn-small" onClick={() => remove(editing.id)}>
-                Удалить
+                Удалить карточку
               </button>
             )}
             <button type="button" className="content-btn-secondary content-btn-small" onClick={closeForm}>
@@ -1124,13 +1140,6 @@ function SplitSectionsTab({
                 value={trackForm.title}
                 onChange={(e) => setTrackForm((f) => ({ ...f, title: e.target.value }))}
                 placeholder="Название трека"
-              />
-              <label>Описание</label>
-              <textarea
-                value={trackForm.descriptionShort ?? ''}
-                onChange={(e) => setTrackForm((f) => ({ ...f, descriptionShort: e.target.value }))}
-                placeholder="Краткое описание"
-                rows={2}
               />
               <label>Обложка</label>
               <div className="content-upload-row">
